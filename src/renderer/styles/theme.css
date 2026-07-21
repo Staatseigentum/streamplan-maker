@@ -174,7 +174,7 @@ html, body {
   align-items: center;
   justify-content: center;
   padding: 18px;
-  box-shadow: 0 4px 36px rgba(91, 63, 174, 0.35);
+  box-shadow: 0 4px 36px color-mix(in srgb, var(--accent-bright) 35%, transparent);
   min-width: 0;
 }
 
@@ -861,4 +861,70 @@ input[type="checkbox"]:checked::after {
 }
 #statusBar.error {
   color: var(--danger);
+}
+
+/* -- Update-ready notice ------------------------------------------------- */
+
+#updateNoticeOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 3, 8, 0.72);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+}
+#updateNoticeOverlay.open {
+  display: flex;
+}
+#updateNoticeModal {
+  width: 480px;
+  max-width: calc(100vw - 64px);
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+.update-notes {
+  background: var(--panel-alt);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+.update-notes-heading {
+  color: #c9b8ff;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin: 12px 0 6px;
+}
+.update-notes-heading:first-child {
+  margin-top: 0;
+}
+.update-notes-list {
+  margin: 0 0 4px;
+  padding-left: 18px;
+}
+.update-notes-list li {
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.update-notes-para {
+  color: var(--text-dim);
+  font-size: 12.5px;
+  line-height: 1.6;
+  margin-bottom: 6px;
+}
+.update-notice-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }

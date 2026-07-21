@@ -11,6 +11,7 @@ import { PROJECT_FILE_EXTENSION, DEFAULT_DISPLAY_MODE, DEFAULT_PREVIEW_FPS } fro
 import { DEFAULT_APP_THEME_ID, applyAppTheme } from "./ui/appThemes.js";
 import { SoftwareSettings } from "./ui/softwareSettings.js";
 import { LayoutEditor } from "./ui/layoutEditor.js";
+import { UpdateNotice } from "./ui/updateNotice.js";
 
 const document_ = createProjectDocument({
   profile: createStreamerProfile({ displayName: "Your Streamer Name", days: [] }),
@@ -112,6 +113,13 @@ const softwareSettings = new SoftwareSettings(document.getElementById("settingsO
   },
 });
 document.getElementById("settingsBtn").addEventListener("click", () => softwareSettings.open());
+
+const updateNotice = new UpdateNotice(document.getElementById("updateNoticeOverlay"));
+window.streamplanAPI.onUpdateStatus((payload) => {
+  if (payload.status === "downloaded") {
+    updateNotice.show({ version: payload.version, releaseNotes: payload.releaseNotes });
+  }
+});
 
 // Minimizing the window is the main lever we have to cut the app's own
 // resource draw to near-zero: the animated app themes keep repainting their
@@ -241,4 +249,4 @@ refreshPreview();
 window.__streamplanDoc = document_;
 window.__streamplanPanels = { schedulePanel, stylePanel, previewCanvas, layoutEditor };
 window.__streamplanProject = { newProject, saveProject, openProject };
-window.__streamplanSettings = { softwareSettings, getAppTheme: () => currentAppTheme };
+window.__streamplanSettings = { softwareSettings, updateNotice, getAppTheme: () => currentAppTheme };

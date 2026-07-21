@@ -11,6 +11,21 @@ function send(status, data = {}) {
   }
 }
 
+// electron-updater's info.releaseNotes is either a plain string (the GitHub
+// release body) or, when multiple versions were skipped, an array of
+// { version, note } entries — normalize both into one string for display.
+function normalizeReleaseNotes(releaseNotes) {
+  if (!releaseNotes) return "";
+  if (typeof releaseNotes === "string") return releaseNotes;
+  if (Array.isArray(releaseNotes)) {
+    return releaseNotes
+      .map((entry) => entry.note || "")
+      .filter(Boolean)
+      .join("\n\n");
+  }
+  return "";
+}
+
 function initAutoUpdater(win) {
   mainWindow = win;
 
@@ -27,7 +42,9 @@ function initAutoUpdater(win) {
   autoUpdater.on("download-progress", (progress) =>
     send("downloading", { percent: Math.round(progress.percent) })
   );
-  autoUpdater.on("update-downloaded", (info) => send("downloaded", { version: info.version }));
+  autoUpdater.on("update-downloaded", (info) =>
+    send("downloaded", { version: info.version, releaseNotes: normalizeReleaseNotes(info.releaseNotes) })
+  );
   autoUpdater.on("error", (err) => send("error", { message: err?.message || String(err) }));
 
   setTimeout(() => checkForUpdates(), 5000);

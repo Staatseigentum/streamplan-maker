@@ -1,6 +1,6 @@
 {
   "name": "streamplan-maker",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Design and export a personalized weekly stream schedule graphic.",
   "main": "src/main/main.js",
   "author": "",
@@ -51,7 +51,8 @@
       "createStartMenuShortcut": true,
       "shortcutName": "${productName}",
       "artifactName": "${productName}-Setup-${version}.${ext}",
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "include": "build/installer.nsh"
     },
     "publish": {
       "provider": "github",
