@@ -1,51 +1,12 @@
-// Renders the small subset of markdown used in CHANGELOG.md sections
-// (### headings, "- " bullets, blank-line paragraphs) as safe DOM nodes —
-// deliberately not innerHTML'ing raw text, since release notes ultimately
-// originate from a file in the repo, not user input, but this keeps it cheap
-// to reason about either way.
-function renderNotesInto(container, markdown) {
-  container.textContent = "";
-  const lines = (markdown || "").replace(/\r\n/g, "\n").split("\n");
-  let list = null;
-  lines.forEach((rawLine) => {
-    const line = rawLine.trim();
-    if (!line) {
-      list = null;
-      return;
-    }
-    const heading = line.match(/^#{2,4}\s+(.*)$/);
-    if (heading) {
-      list = null;
-      const h = document.createElement("div");
-      h.className = "update-notes-heading";
-      h.textContent = heading[1];
-      container.appendChild(h);
-      return;
-    }
-    const bullet = line.match(/^[-*]\s+(.*)$/);
-    if (bullet) {
-      if (!list) {
-        list = document.createElement("ul");
-        list.className = "update-notes-list";
-        container.appendChild(list);
-      }
-      const li = document.createElement("li");
-      li.textContent = bullet[1];
-      list.appendChild(li);
-      return;
-    }
-    list = null;
-    const p = document.createElement("div");
-    p.className = "update-notes-para";
-    p.textContent = line;
-    container.appendChild(p);
-  });
-  if (!container.children.length) {
-    const fallback = document.createElement("div");
-    fallback.className = "update-notes-para";
-    fallback.textContent = "No details were provided for this update.";
-    container.appendChild(fallback);
-  }
+// electron-updater's GitHub provider reads releaseNotes from GitHub's own
+// releases Atom feed, which reports the release body pre-rendered as HTML
+// (not the raw markdown) — so this is already "<h3>Added</h3><ul>…" etc.,
+// not something to run a markdown parser over. Safe to set as innerHTML
+// directly: it originates from this repo's own CHANGELOG.md by way of the
+// release workflow, not from user input.
+function renderNotesInto(container, html) {
+  const trimmed = (html || "").trim();
+  container.innerHTML = trimmed || '<p class="update-notes-empty">No details were provided for this update.</p>';
 }
 
 export class UpdateNotice {
@@ -86,7 +47,7 @@ export class UpdateNotice {
     laterBtn.addEventListener("click", () => this.close());
     const installBtn = document.createElement("button");
     installBtn.className = "primary";
-    installBtn.textContent = "Restart && Install";
+    installBtn.textContent = "Restart & Install";
     installBtn.addEventListener("click", () => window.streamplanAPI.quitAndInstallUpdate());
     btnRow.append(laterBtn, installBtn);
     modal.appendChild(btnRow);

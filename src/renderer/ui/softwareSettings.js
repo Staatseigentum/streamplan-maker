@@ -274,7 +274,7 @@ export class SoftwareSettings {
     btnRow.appendChild(checkBtn);
 
     const installBtn = document.createElement("button");
-    installBtn.textContent = "Restart && Install";
+    installBtn.textContent = "Restart & Install";
     installBtn.style.display = "none";
     installBtn.addEventListener("click", () => window.streamplanAPI.quitAndInstallUpdate());
     btnRow.appendChild(installBtn);

@@ -2,6 +2,12 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.3] - 2026-07-21
+
+### Fixed
+- The "update ready" popup no longer shows raw HTML tags as visible text — GitHub delivers release notes as pre-rendered HTML, not markdown, so the popup now displays it directly instead of running it through a markdown parser that never matched.
+- The "Restart & Install" buttons had a stray double ampersand ("Restart && Install").
+
 ## [1.0.2] - 2026-07-21
 
 ### Added

@@ -897,7 +897,14 @@ input[type="checkbox"]:checked::after {
   max-height: 320px;
   overflow-y: auto;
 }
-.update-notes-heading {
+/* Content here is GitHub's own rendered HTML for the release body (plain
+   h1-h6/ul/li/p/a tags, no classes of its own) — styled generically by tag
+   rather than by class. See updateNotice.js for why this is innerHTML'd
+   directly instead of run through a markdown parser. */
+.update-notes h1,
+.update-notes h2,
+.update-notes h3,
+.update-notes h4 {
   color: #c9b8ff;
   font-size: 12px;
   font-weight: 700;
@@ -905,23 +912,40 @@ input[type="checkbox"]:checked::after {
   text-transform: uppercase;
   margin: 12px 0 6px;
 }
-.update-notes-heading:first-child {
+.update-notes h1:first-child,
+.update-notes h2:first-child,
+.update-notes h3:first-child,
+.update-notes h4:first-child {
   margin-top: 0;
 }
-.update-notes-list {
+.update-notes ul,
+.update-notes ol {
   margin: 0 0 4px;
   padding-left: 18px;
 }
-.update-notes-list li {
+.update-notes li {
   color: var(--text);
   font-size: 12.5px;
   line-height: 1.6;
 }
-.update-notes-para {
+.update-notes p,
+.update-notes-empty {
   color: var(--text-dim);
   font-size: 12.5px;
   line-height: 1.6;
-  margin-bottom: 6px;
+  margin: 0 0 6px;
+}
+.update-notes a {
+  color: var(--accent-bright);
+}
+.update-notes strong {
+  color: var(--text);
+}
+.update-notes code {
+  background: var(--card);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11.5px;
 }
 .update-notice-actions {
   display: flex;
