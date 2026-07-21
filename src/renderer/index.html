@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data: blob:;" />
+  <title>Streamplan Maker</title>
+  <link rel="icon" type="image/png" href="assets/icon.png" />
+  <link rel="stylesheet" href="styles/theme.css" />
+  <link rel="stylesheet" href="styles/appThemes.css" />
+</head>
+<body>
+  <div id="app">
+    <div id="projectBar">
+      <div class="project-bar-group">
+        <button id="newProjectBtn" class="menu-btn" title="New Project (Ctrl+N)">New</button>
+        <button id="openProjectBtn" class="menu-btn" title="Open Project… (Ctrl+O)">Open</button>
+      </div>
+      <div class="project-bar-divider"></div>
+      <div class="project-bar-group">
+        <button id="saveProjectBtn" class="menu-btn" title="Save Project (Ctrl+S)">Save</button>
+        <button id="saveAsProjectBtn" class="menu-btn" title="Save Project As… (Ctrl+Shift+S)">Save As…</button>
+      </div>
+    </div>
+    <div id="topBar">
+      <div id="titleBlock">
+        <div id="appTitle">Streamplan Maker</div>
+        <div id="appSubtitle">CRAFT YOUR STREAM SCHEDULE</div>
+      </div>
+      <div id="topBarSpacer"></div>
+      <div id="exportBar"></div>
+      <button id="layoutEditorBtn" class="pill" title="Layout Editor">▦ Layout Editor</button>
+      <button id="layoutImportBtn" class="pill" title="Import a saved Layout file (.splayout)">⇩ Import Layout</button>
+      <button id="settingsBtn" class="pill" title="Software Settings">⚙ Settings</button>
+    </div>
+    <div id="body">
+      <div id="sidePanel" class="side-scroll"></div>
+      <div id="centerArea">
+        <div id="previewFrame">
+          <canvas id="previewCanvas"></canvas>
+        </div>
+      </div>
+      <div id="stylePanel" class="side-scroll"></div>
+    </div>
+    <div id="statusBar"></div>
+  </div>
+  <div id="settingsOverlay"></div>
+  <div id="layoutEditorOverlay"></div>
+  <script src="../../node_modules/jspdf/dist/jspdf.umd.min.js"></script>
+  <script src="../../node_modules/jszip/dist/jszip.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

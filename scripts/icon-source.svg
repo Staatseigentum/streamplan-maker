@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#171029"/>
+      <stop offset="100%" stop-color="#0c0a12"/>
+    </linearGradient>
+    <linearGradient id="bars" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#5f47b8"/>
+      <stop offset="100%" stop-color="#9c7ff0"/>
+    </linearGradient>
+    <radialGradient id="dot" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#d9c6ff"/>
+      <stop offset="100%" stop-color="#b98bff"/>
+    </radialGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1024" height="1024" rx="220" fill="url(#bg)"/>
+  <rect x="24" y="24" width="976" height="976" rx="198" fill="none" stroke="#3a2f5c" stroke-width="6" opacity="0.6"/>
+
+  <!-- 7 weekday bars, center one is the accent "live" day -->
+  <g>
+    <rect x="228" y="560" width="70" height="220" rx="35" fill="url(#bars)"/>
+    <rect x="326" y="480" width="70" height="300" rx="35" fill="url(#bars)"/>
+    <rect x="424" y="410" width="70" height="370" rx="35" fill="url(#bars)"/>
+    <rect x="522" y="330" width="70" height="450" rx="35" fill="#b98bff"/>
+    <rect x="620" y="410" width="70" height="370" rx="35" fill="url(#bars)"/>
+    <rect x="718" y="480" width="70" height="300" rx="35" fill="url(#bars)"/>
+    <rect x="816" y="560" width="70" height="220" rx="35" fill="url(#bars)"/>
+  </g>
+
+  <!-- live dot above the accent day -->
+  <circle cx="557" cy="270" r="46" fill="url(#dot)"/>
+</svg>

@@ -1,0 +1,824 @@
+/* Software Settings — app CHROME themes (the editor's own look, distinct from
+   the streamplan design templates in models/templates.js, which only affect
+   the exported graphic). Selected via body[data-app-theme] + toggled via
+   the boolean body[data-app-theme-animated] attribute, with the specific
+   motion style chosen by body[data-app-anim-style]. 12 static, 12 animated. */
+
+/* -- Static (palette swap only, no motion) ------------------------------ */
+
+body[data-app-theme="midnight_violet"] {
+  --bg: #0c0a12;
+  --panel: #120f1a;
+  --panel-alt: #14111d;
+  --card: #17131f;
+  --card-active: #1b1628;
+  --border: #241d33;
+  --border-strong: #382c52;
+  --border-accent: #b98bff;
+  --text: #ede7f6;
+  --text-dim: #9c8fbf;
+  --text-faint: #7a6f95;
+  --accent: #7b5fd9;
+  --accent-hover: #8f74e8;
+  --accent-bright: #b98bff;
+}
+
+body[data-app-theme="obsidian_slate"] {
+  --bg: #0a0b0d;
+  --panel: #101216;
+  --panel-alt: #131519;
+  --card: #16181d;
+  --card-active: #1b1e24;
+  --border: #242830;
+  --border-strong: #38404d;
+  --border-accent: #7fa4f2;
+  --text: #e8ecf2;
+  --text-dim: #93a0b5;
+  --text-faint: #6c7789;
+  --accent: #4f7bdb;
+  --accent-hover: #628fee;
+  --accent-bright: #7fa4f2;
+}
+
+body[data-app-theme="crimson_dusk"] {
+  --bg: #120a0c;
+  --panel: #1a0f12;
+  --panel-alt: #1d1114;
+  --card: #211318;
+  --card-active: #28171d;
+  --border: #3a1e26;
+  --border-strong: #5a2a35;
+  --border-accent: #ff8fa3;
+  --text: #f5e7ea;
+  --text-dim: #c99aa4;
+  --text-faint: #9c7480;
+  --accent: #d9495f;
+  --accent-hover: #e85e73;
+  --accent-bright: #ff8fa3;
+}
+
+body[data-app-theme="emerald_depth"] {
+  --bg: #08120e;
+  --panel: #0f1a15;
+  --panel-alt: #111d17;
+  --card: #14221b;
+  --card-active: #182a21;
+  --border: #1e3529;
+  --border-strong: #2c503d;
+  --border-accent: #57e0a8;
+  --text: #e5f5ee;
+  --text-dim: #8fc0a8;
+  --text-faint: #6b9482;
+  --accent: #2fae7a;
+  --accent-hover: #3ac48c;
+  --accent-bright: #57e0a8;
+}
+
+body[data-app-theme="sapphire_hollow"] {
+  --bg: #070c14;
+  --panel: #0d1420;
+  --panel-alt: #0f1724;
+  --card: #121b2b;
+  --card-active: #162032;
+  --border: #1c2c44;
+  --border-strong: #2c4266;
+  --border-accent: #6fa8ff;
+  --text: #e6edf8;
+  --text-dim: #8fa3c7;
+  --text-faint: #647a9c;
+  --accent: #3d6fd0;
+  --accent-hover: #5183e0;
+  --accent-bright: #6fa8ff;
+}
+
+body[data-app-theme="amber_vault"] {
+  --bg: #120d06;
+  --panel: #1a130a;
+  --panel-alt: #1d150b;
+  --card: #23190d;
+  --card-active: #2b1f10;
+  --border: #3d2a13;
+  --border-strong: #5c3f1a;
+  --border-accent: #ffc25c;
+  --text: #f7ecd9;
+  --text-dim: #d0ad78;
+  --text-faint: #a3835a;
+  --accent: #cf8a2c;
+  --accent-hover: #e29c3a;
+  --accent-bright: #ffc25c;
+}
+
+body[data-app-theme="void_indigo"] {
+  --bg: #08070f;
+  --panel: #0d0b18;
+  --panel-alt: #100d1c;
+  --card: #141122;
+  --card-active: #191428;
+  --border: #211c38;
+  --border-strong: #332a56;
+  --border-accent: #9d8bff;
+  --text: #eae7f8;
+  --text-dim: #9c93c4;
+  --text-faint: #706998;
+  --accent: #6a55d1;
+  --accent-hover: #7d68e0;
+  --accent-bright: #9d8bff;
+}
+
+body[data-app-theme="rose_quartz_noir"] {
+  --bg: #12090d;
+  --panel: #1a0e14;
+  --panel-alt: #1e1017;
+  --card: #24131b;
+  --card-active: #2c1721;
+  --border: #3e1f2c;
+  --border-strong: #5e2c40;
+  --border-accent: #ff8fb8;
+  --text: #f7e6ee;
+  --text-dim: #cf93ac;
+  --text-faint: #a06f85;
+  --accent: #d9497f;
+  --accent-hover: #e85e90;
+  --accent-bright: #ff8fb8;
+}
+
+body[data-app-theme="slate_cobalt"] {
+  --bg: #0a0d10;
+  --panel: #0f1317;
+  --panel-alt: #12161b;
+  --card: #161b21;
+  --card-active: #1b2129;
+  --border: #262f39;
+  --border-strong: #3a4756;
+  --border-accent: #6fb8f2;
+  --text: #e9eef2;
+  --text-dim: #93a5b5;
+  --text-faint: #67788a;
+  --accent: #3f83c2;
+  --accent-hover: #5296d4;
+  --accent-bright: #6fb8f2;
+}
+
+body[data-app-theme="onyx_gold"] {
+  --bg: #060606;
+  --panel: #0d0c0a;
+  --panel-alt: #100f0c;
+  --card: #141210;
+  --card-active: #191713;
+  --border: #2c2618;
+  --border-strong: #453a20;
+  --border-accent: #f2ce6e;
+  --text: #f5f0e4;
+  --text-dim: #bdac82;
+  --text-faint: #8c7d58;
+  --accent: #b9932f;
+  --accent-hover: #cca841;
+  --accent-bright: #f2ce6e;
+}
+
+body[data-app-theme="frost_steel"] {
+  --bg: #090c0e;
+  --panel: #0e1316;
+  --panel-alt: #111719;
+  --card: #151c1f;
+  --card-active: #1a2225;
+  --border: #253034;
+  --border-strong: #38484d;
+  --border-accent: #a8eef2;
+  --text: #e9f6f7;
+  --text-dim: #93bcc0;
+  --text-faint: #678d91;
+  --accent: #3fa8b8;
+  --accent-hover: #52bcca;
+  --accent-bright: #a8eef2;
+}
+
+body[data-app-theme="wine_umbra"] {
+  --bg: #100609;
+  --panel: #180a0e;
+  --panel-alt: #1b0c10;
+  --card: #221016;
+  --card-active: #29131a;
+  --border: #3c1b25;
+  --border-strong: #5c2836;
+  --border-accent: #e88fa3;
+  --text: #f5e5ea;
+  --text-dim: #c48d9c;
+  --text-faint: #956675;
+  --accent: #a83e56;
+  --accent-hover: #ba4f68;
+  --accent-bright: #e88fa3;
+}
+
+/* -- Animated (palette + a slow drifting gradient across the main chrome) */
+
+body[data-app-theme="aurora_drift"] {
+  --bg: #0a0c16;
+  --panel: #121524;
+  --panel-alt: #141a2b;
+  --card: #171c2c;
+  --card-active: #1c2236;
+  --border: #232a42;
+  --border-strong: #37406b;
+  --border-accent: #8fd9d0;
+  --text: #eaf0f6;
+  --text-dim: #9aa8c9;
+  --text-faint: #717d9c;
+  --accent: #5f9dd9;
+  --accent-hover: #74b2ea;
+  --accent-bright: #8fd9d0;
+}
+
+body[data-app-theme="nebula_pulse"] {
+  --bg: #0a0812;
+  --panel: #120e1e;
+  --panel-alt: #150f22;
+  --card: #171128;
+  --card-active: #1d1530;
+  --border: #2a1f42;
+  --border-strong: #432f66;
+  --border-accent: #ff8fd6;
+  --text: #f0e9fb;
+  --text-dim: #b79cd6;
+  --text-faint: #8a72a8;
+  --accent: #c25fe0;
+  --accent-hover: #d474ee;
+  --accent-bright: #ff8fd6;
+}
+
+body[data-app-theme="neon_grid"] {
+  --bg: #08090c;
+  --panel: #0e1013;
+  --panel-alt: #101318;
+  --card: #131619;
+  --card-active: #171b1f;
+  --border: #1e2830;
+  --border-strong: #2c3f4d;
+  --border-accent: #5ef2ff;
+  --text: #eafcff;
+  --text-dim: #8fd9e8;
+  --text-faint: #5f96a3;
+  --accent: #ff3fa0;
+  --accent-hover: #ff5cb0;
+  --accent-bright: #5ef2ff;
+}
+
+body[data-app-theme="ember_flow"] {
+  --bg: #120a06;
+  --panel: #1a0f08;
+  --panel-alt: #1d120a;
+  --card: #22150c;
+  --card-active: #291a10;
+  --border: #3a2313;
+  --border-strong: #5a331a;
+  --border-accent: #ffb066;
+  --text: #f8ead9;
+  --text-dim: #d4a374;
+  --text-faint: #a67e56;
+  --accent: #e0742f;
+  --accent-hover: #f28a43;
+  --accent-bright: #ffb066;
+}
+
+body[data-app-theme="solar_flare"] {
+  --bg: #140705;
+  --panel: #1e0c08;
+  --panel-alt: #220e09;
+  --card: #29120c;
+  --card-active: #33170e;
+  --border: #4a2013;
+  --border-strong: #6e2f1a;
+  --border-accent: #ffa64d;
+  --text: #fbe9de;
+  --text-dim: #e0a377;
+  --text-faint: #ac7752;
+  --accent: #e0621f;
+  --accent-hover: #f27633;
+  --accent-bright: #ffa64d;
+}
+
+body[data-app-theme="glacier_pulse"] {
+  --bg: #060d10;
+  --panel: #0a1418;
+  --panel-alt: #0c171c;
+  --card: #101c21;
+  --card-active: #142228;
+  --border: #1c333b;
+  --border-strong: #2b4d58;
+  --border-accent: #baf7ff;
+  --text: #eafcff;
+  --text-dim: #8fd6e0;
+  --text-faint: #5fa0aa;
+  --accent: #34a6c2;
+  --accent-hover: #48bdd6;
+  --accent-bright: #baf7ff;
+}
+
+body[data-app-theme="void_spiral"] {
+  --bg: #08050c;
+  --panel: #0e0912;
+  --panel-alt: #100a15;
+  --card: #150d1c;
+  --card-active: #1b1124;
+  --border: #281a38;
+  --border-strong: #3f2a58;
+  --border-accent: #c48bff;
+  --text: #ede6fa;
+  --text-dim: #ad93cf;
+  --text-faint: #7c699c;
+  --accent: #7c4fd9;
+  --accent-hover: #9163e8;
+  --accent-bright: #c48bff;
+}
+
+body[data-app-theme="prism_sweep"] {
+  --bg: #08080c;
+  --panel: #0d0d13;
+  --panel-alt: #0f0f16;
+  --card: #14141c;
+  --card-active: #191924;
+  --border: #24243a;
+  --border-strong: #38385c;
+  --border-accent: #ffffff;
+  --text: #f2f2fb;
+  --text-dim: #9d9dc4;
+  --text-faint: #6e6e98;
+  --accent: #7c5fe0;
+  --accent-hover: #9074ee;
+  --accent-bright: #ffffff;
+}
+
+body[data-app-theme="bloodmoon_pulse"] {
+  --bg: #0e0505;
+  --panel: #170808;
+  --panel-alt: #1a0909;
+  --card: #210c0c;
+  --card-active: #290e0e;
+  --border: #3c1414;
+  --border-strong: #5c1c1c;
+  --border-accent: #ff5c5c;
+  --text: #f8e6e6;
+  --text-dim: #cf8a8a;
+  --text-faint: #9c6363;
+  --accent: #c22e34;
+  --accent-hover: #d43e44;
+  --accent-bright: #ff5c5c;
+}
+
+body[data-app-theme="cyber_sweep"] {
+  --bg: #07080b;
+  --panel: #0b0e13;
+  --panel-alt: #0d1015;
+  --card: #10141a;
+  --card-active: #141a21;
+  --border: #1e2530;
+  --border-strong: #2e394a;
+  --border-accent: #ff4fc3;
+  --text: #eaf6ff;
+  --text-dim: #8fb8d6;
+  --text-faint: #5f88a3;
+  --accent: #2fb8e0;
+  --accent-hover: #45cbf0;
+  --accent-bright: #ff4fc3;
+}
+
+body[data-app-theme="astral_aurora"] {
+  --bg: #070b12;
+  --panel: #0c121c;
+  --panel-alt: #0e1520;
+  --card: #121a28;
+  --card-active: #16202f;
+  --border: #202e44;
+  --border-strong: #324768;
+  --border-accent: #7ff2d6;
+  --text: #e8f3f6;
+  --text-dim: #93c4c7;
+  --text-faint: #698f97;
+  --accent: #3f9dc2;
+  --accent-hover: #52b3d4;
+  --accent-bright: #7ff2d6;
+}
+
+body[data-app-theme="molten_aurora"] {
+  --bg: #100608;
+  --panel: #180a0c;
+  --panel-alt: #1b0c0e;
+  --card: #221014;
+  --card-active: #2a1318;
+  --border: #3c1a22;
+  --border-strong: #5c2632;
+  --border-accent: #ff9e5c;
+  --text: #f8ece0;
+  --text-dim: #d6a084;
+  --text-faint: #a3735a;
+  --accent: #d9522f;
+  --accent-hover: #e86840;
+  --accent-bright: #ff9e5c;
+}
+
+body[data-app-theme="galaxy_veil"] {
+  --bg: #05040c;
+  --panel: #0a0818;
+  --panel-alt: #0c0a1c;
+  --card: #100d24;
+  --card-active: #14112c;
+  --border: #221c40;
+  --border-strong: #362c5c;
+  --border-accent: #cbb8ff;
+  --text: #f0ecfa;
+  --text-dim: #a99cd0;
+  --text-faint: #786a9c;
+  --accent: #7c5fe0;
+  --accent-hover: #9074ee;
+  --accent-bright: #cbb8ff;
+}
+
+/* -- Shared animation keyframes, one per animStyle ----------------------- */
+
+@keyframes appBgPulse {
+  0%, 100% { background-position: 25% 25%, 75% 75%; background-size: 200% 200%, 220% 220%; }
+  50% { background-position: 75% 75%, 25% 25%; background-size: 260% 260%, 280% 280%; }
+}
+
+@keyframes appBgSweep {
+  0% { background-position: -60% 0%; }
+  100% { background-position: 160% 0%; }
+}
+
+@property --rot-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes appBgRotate {
+  from { --rot-angle: 0deg; }
+  to { --rot-angle: 360deg; }
+}
+
+@keyframes appBgAurora {
+  0% { background-position: 0% 20%; }
+  25% { background-position: 60% 80%; }
+  50% { background-position: 100% 30%; }
+  75% { background-position: 40% 90%; }
+  100% { background-position: 0% 20%; }
+}
+
+/* Galaxy: 2 static nebula-cloud layers + 4 small comet-dot layers, all on
+   the element's own background-image. The nebula layers use size "auto"
+   (== element size), so animating their background-position is a no-op by
+   construction (offset multiplier is zero) — only the oversized comet
+   tiles (200% wide) actually move, sweeping their embedded dot across.
+   Ranges are tuned so each dot spends most of the cycle actually crossing
+   the visible area rather than sitting off-screen; the two pairs travel in
+   opposite directions with staggered phases so they don't move in lockstep. */
+@keyframes appGalaxyDrift {
+  0% { background-position: 20% 30%, 78% 68%, 115% 0%, 95% 0%, -15% 0%, -45% 0%; }
+  100% { background-position: 20% 30%, 78% 68%, -15% 0%, -35% 0%, 115% 0%, 85% 0%; }
+}
+
+/* The two star layers twinkle on independent, deliberately mismatched
+   timings so the combined field never looks like it's blinking in unison —
+   at any instant some stars are near-invisible while others are near-peak. */
+@keyframes appGalaxyTwinkleA {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 1; }
+}
+@keyframes appGalaxyTwinkleB {
+  0%, 100% { opacity: 0.95; }
+  50% { opacity: 0.2; }
+}
+
+/* -- Per-style animation binding, applied to every animated theme's chrome
+      (the actual gradient colors are set per-theme further below) ------- */
+
+@keyframes appBgDrift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+body[data-app-anim-style="drift"] #topBar,
+body[data-app-anim-style="drift"] #sidePanel,
+body[data-app-anim-style="drift"] #stylePanel,
+body[data-app-anim-style="drift"] #statusBar,
+body[data-app-anim-style="drift"] #centerArea {
+  background-size: 320% 320%;
+  animation: appBgDrift 26s ease-in-out infinite;
+}
+
+body[data-app-anim-style="pulse"] #topBar,
+body[data-app-anim-style="pulse"] #sidePanel,
+body[data-app-anim-style="pulse"] #stylePanel,
+body[data-app-anim-style="pulse"] #statusBar,
+body[data-app-anim-style="pulse"] #centerArea {
+  animation: appBgPulse 14s ease-in-out infinite;
+}
+
+body[data-app-anim-style="sweep"] #topBar,
+body[data-app-anim-style="sweep"] #sidePanel,
+body[data-app-anim-style="sweep"] #stylePanel,
+body[data-app-anim-style="sweep"] #statusBar,
+body[data-app-anim-style="sweep"] #centerArea {
+  background-size: 300% 100%;
+  animation: appBgSweep 9s linear infinite;
+}
+
+body[data-app-anim-style="rotate"] #topBar,
+body[data-app-anim-style="rotate"] #sidePanel,
+body[data-app-anim-style="rotate"] #stylePanel,
+body[data-app-anim-style="rotate"] #statusBar,
+body[data-app-anim-style="rotate"] #centerArea {
+  animation: appBgRotate 16s linear infinite;
+}
+
+body[data-app-anim-style="aurora"] #topBar,
+body[data-app-anim-style="aurora"] #sidePanel,
+body[data-app-anim-style="aurora"] #stylePanel,
+body[data-app-anim-style="aurora"] #statusBar,
+body[data-app-anim-style="aurora"] #centerArea {
+  background-size: 420% 420%;
+  animation: appBgAurora 30s ease-in-out infinite;
+}
+
+body[data-app-anim-style="galaxy"] #topBar,
+body[data-app-anim-style="galaxy"] #sidePanel,
+body[data-app-anim-style="galaxy"] #stylePanel,
+body[data-app-anim-style="galaxy"] #statusBar,
+body[data-app-anim-style="galaxy"] #centerArea {
+  position: relative;
+  /* clip-path (not overflow:hidden) so the star/comet layers stay clipped
+     to the box without touching #sidePanel/#stylePanel's own overflow-y:auto
+     (.side-scroll) — overflow is a single shared property, so setting it
+     here would silently clobber their scrolling. */
+  clip-path: inset(0);
+  background-size: auto, auto, 200% 100%, 200% 100%, 200% 100%, 200% 100%;
+  animation: appGalaxyDrift 9s linear infinite;
+}
+
+body[data-app-anim-style="galaxy"] #topBar::before,
+body[data-app-anim-style="galaxy"] #sidePanel::before,
+body[data-app-anim-style="galaxy"] #stylePanel::before,
+body[data-app-anim-style="galaxy"] #statusBar::before,
+body[data-app-anim-style="galaxy"] #centerArea::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: transparent;
+  pointer-events: none;
+  animation: appGalaxyTwinkleA 3.4s ease-in-out infinite;
+  box-shadow: 873px 494px 1.7px 0.5px rgba(200,210,255,0.8), 1034px 495px 0.7px 0.2px rgba(255,255,255,0.9), 431px 947px 1.4px 0.5px rgba(220,225,255,0.85), 384px 99px 1.7px 0.5px rgba(200,210,255,0.8), 677px 267px 1.6px 0.2px rgba(200,210,255,0.8), 1445px 765px 0.6px 0.3px rgba(220,225,255,0.85), 84px 256px 1.2px 0.5px rgba(255,255,255,0.9), 775px 3px 1.3px 0.4px rgba(220,225,255,0.85), 1053px 811px 1.6px 0.3px rgba(200,210,255,0.8), 642px 872px 0.7px 0.5px rgba(255,255,255,0.9), 26px 464px 0.5px 0.3px rgba(200,210,255,0.8), 361px 309px 1.3px 0.5px rgba(220,225,255,0.85), 1210px 578px 1.3px 0.2px rgba(255,255,255,0.9), 120px 855px 1.8px 0.3px rgba(200,210,255,0.8), 332px 401px 0.6px 0.2px rgba(255,255,255,0.9), 534px 516px 1.8px 0.4px rgba(220,225,255,0.85), 532px 598px 1.0px 0.2px rgba(200,210,255,0.8), 648px 788px 0.7px 0.5px rgba(220,225,255,0.85), 1146px 597px 1.1px 0.4px rgba(255,255,255,0.9), 17px 313px 1.2px 0.3px rgba(200,210,255,0.8), 1236px 566px 0.6px 0.6px rgba(220,225,255,0.85), 893px 118px 0.6px 0.5px rgba(200,210,255,0.8), 698px 741px 1.3px 0.5px rgba(220,225,255,0.85), 192px 434px 0.6px 0.6px rgba(220,225,255,0.85), 1062px 483px 0.6px 0.2px rgba(220,225,255,0.85), 672px 903px 0.5px 0.6px rgba(200,210,255,0.8), 915px 590px 1.2px 0.4px rgba(220,225,255,0.85), 348px 208px 0.6px 0.3px rgba(200,210,255,0.8), 952px 220px 1.4px 0.3px rgba(200,210,255,0.8), 1328px 244px 0.6px 0.4px rgba(200,210,255,0.8), 962px 229px 1.5px 0.6px rgba(255,255,255,0.9), 48px 231px 0.7px 0.4px rgba(255,255,255,0.9), 1154px 249px 0.6px 0.3px rgba(220,225,255,0.85), 67px 777px 0.5px 0.5px rgba(255,255,255,0.9), 1053px 184px 1.5px 0.3px rgba(220,225,255,0.85), 825px 405px 1.4px 0.5px rgba(200,210,255,0.8), 616px 296px 1.3px 0.5px rgba(200,210,255,0.8), 588px 52px 0.6px 0.6px rgba(220,225,255,0.85), 859px 852px 1.6px 0.5px rgba(200,210,255,0.8), 75px 374px 1.0px 0.2px rgba(220,225,255,0.85), 1017px 583px 1.6px 0.5px rgba(220,225,255,0.85), 36px 779px 1.2px 0.3px rgba(255,255,255,0.9), 252px 17px 0.7px 0.5px rgba(255,255,255,0.9), 245px 652px 0.7px 0.3px rgba(255,255,255,0.9), 219px 802px 1.5px 0.3px rgba(220,225,255,0.85), 1031px 362px 1.3px 0.5px rgba(220,225,255,0.85), 614px 5px 0.6px 0.2px rgba(220,225,255,0.85), 780px 170px 1.5px 0.5px rgba(220,225,255,0.85), 141px 264px 1.0px 0.5px rgba(255,255,255,0.9), 962px 810px 1.1px 0.6px rgba(255,255,255,0.9), 1049px 98px 1.8px 0.4px rgba(200,210,255,0.8), 457px 552px 1.4px 0.6px rgba(255,255,255,0.9), 99px 506px 0.9px 0.3px rgba(255,255,255,0.9), 933px 167px 0.8px 0.4px rgba(220,225,255,0.85), 358px 440px 1.1px 0.2px rgba(220,225,255,0.85);
+}
+
+body[data-app-anim-style="galaxy"] #topBar::after,
+body[data-app-anim-style="galaxy"] #sidePanel::after,
+body[data-app-anim-style="galaxy"] #stylePanel::after,
+body[data-app-anim-style="galaxy"] #statusBar::after,
+body[data-app-anim-style="galaxy"] #centerArea::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: transparent;
+  pointer-events: none;
+  animation: appGalaxyTwinkleB 4.9s ease-in-out infinite;
+  animation-delay: -1.6s;
+  box-shadow: 276px 451px 1.9px 0.4px rgba(190,225,255,0.95), 12px 224px 1.4px 0.4px rgba(190,225,255,0.95), 429px 470px 1.7px 1.1px rgba(213,199,255,0.95), 578px 129px 1.9px 0.8px rgba(255,255,255,1), 1390px 461px 2.6px 1.0px rgba(255,255,255,1), 1349px 509px 1.4px 0.7px rgba(213,199,255,0.95), 282px 95px 3.0px 0.4px rgba(190,225,255,0.95), 842px 402px 2.4px 0.9px rgba(213,199,255,0.95), 1219px 58px 2.8px 1.0px rgba(213,199,255,0.95), 954px 36px 1.9px 1.1px rgba(255,255,255,1), 204px 238px 2.2px 1.0px rgba(213,199,255,0.95), 834px 228px 2.5px 0.5px rgba(213,199,255,0.95), 279px 134px 1.3px 0.5px rgba(213,199,255,0.95), 813px 40px 1.9px 1.0px rgba(255,255,255,1), 697px 890px 2.8px 0.7px rgba(190,225,255,0.95), 1306px 293px 1.4px 0.9px rgba(213,199,255,0.95), 1212px 116px 2.9px 0.9px rgba(190,225,255,0.95), 404px 290px 2.9px 0.9px rgba(190,225,255,0.95), 1292px 12px 1.9px 1.1px rgba(213,199,255,0.95), 889px 298px 2.1px 0.4px rgba(190,225,255,0.95), 1457px 600px 2.7px 0.5px rgba(190,225,255,0.95), 807px 12px 1.9px 0.7px rgba(255,255,255,1), 595px 874px 2.0px 0.9px rgba(255,255,255,1), 789px 65px 2.7px 0.6px rgba(213,199,255,0.95);
+}
+
+/* -- Per-theme gradient colors (paired with the style binding above) ---- */
+
+body[data-app-theme="aurora_drift"] #topBar,
+body[data-app-theme="aurora_drift"] #sidePanel,
+body[data-app-theme="aurora_drift"] #stylePanel,
+body[data-app-theme="aurora_drift"] #statusBar,
+body[data-app-theme="aurora_drift"] #centerArea {
+  background-image: linear-gradient(120deg, #1c1440, #123a3a, #2a1750, #103048);
+}
+
+body[data-app-theme="nebula_pulse"] #topBar,
+body[data-app-theme="nebula_pulse"] #sidePanel,
+body[data-app-theme="nebula_pulse"] #stylePanel,
+body[data-app-theme="nebula_pulse"] #statusBar,
+body[data-app-theme="nebula_pulse"] #centerArea {
+  background-image: linear-gradient(135deg, #1a0f3a, #3a1050, #103a52, #200f40);
+}
+
+body[data-app-theme="neon_grid"] #topBar,
+body[data-app-theme="neon_grid"] #sidePanel,
+body[data-app-theme="neon_grid"] #stylePanel,
+body[data-app-theme="neon_grid"] #statusBar,
+body[data-app-theme="neon_grid"] #centerArea {
+  background-image: linear-gradient(125deg, #12030f, #031418, #150318, #021014);
+}
+
+body[data-app-theme="ember_flow"] #topBar,
+body[data-app-theme="ember_flow"] #sidePanel,
+body[data-app-theme="ember_flow"] #stylePanel,
+body[data-app-theme="ember_flow"] #statusBar,
+body[data-app-theme="ember_flow"] #centerArea {
+  background-image: linear-gradient(120deg, #2a1204, #401a08, #200a10, #351506);
+}
+
+body[data-app-theme="solar_flare"] #topBar,
+body[data-app-theme="solar_flare"] #sidePanel,
+body[data-app-theme="solar_flare"] #stylePanel,
+body[data-app-theme="solar_flare"] #statusBar,
+body[data-app-theme="solar_flare"] #centerArea {
+  background-image: conic-gradient(from var(--rot-angle) at 50% 50%, #2a0a04, #6e1f0a, #e0621f, #ffb347, #6e1f0a, #2a0a04);
+}
+
+body[data-app-theme="glacier_pulse"] #topBar,
+body[data-app-theme="glacier_pulse"] #sidePanel,
+body[data-app-theme="glacier_pulse"] #stylePanel,
+body[data-app-theme="glacier_pulse"] #statusBar,
+body[data-app-theme="glacier_pulse"] #centerArea {
+  background-image:
+    radial-gradient(circle at 30% 30%, color-mix(in srgb, #baf7ff 55%, transparent) 0%, transparent 60%),
+    radial-gradient(circle at 70% 70%, color-mix(in srgb, #34a6c2 65%, transparent) 0%, transparent 65%);
+}
+
+body[data-app-theme="void_spiral"] #topBar,
+body[data-app-theme="void_spiral"] #sidePanel,
+body[data-app-theme="void_spiral"] #stylePanel,
+body[data-app-theme="void_spiral"] #statusBar,
+body[data-app-theme="void_spiral"] #centerArea {
+  background-image: conic-gradient(from var(--rot-angle) at 50% 50%, #0a0512, #2c1250, #6a2fc0, #c48bff, #2c1250, #0a0512);
+}
+
+body[data-app-theme="prism_sweep"] #topBar,
+body[data-app-theme="prism_sweep"] #sidePanel,
+body[data-app-theme="prism_sweep"] #stylePanel,
+body[data-app-theme="prism_sweep"] #statusBar,
+body[data-app-theme="prism_sweep"] #centerArea {
+  background-image: linear-gradient(100deg, #0d0d13 0%, #0d0d13 38%, #7c5fe0 46%, #ffffff 50%, #5fe0d0 54%, #0d0d13 62%, #0d0d13 100%);
+}
+
+body[data-app-theme="bloodmoon_pulse"] #topBar,
+body[data-app-theme="bloodmoon_pulse"] #sidePanel,
+body[data-app-theme="bloodmoon_pulse"] #stylePanel,
+body[data-app-theme="bloodmoon_pulse"] #statusBar,
+body[data-app-theme="bloodmoon_pulse"] #centerArea {
+  background-image:
+    radial-gradient(circle at 30% 30%, color-mix(in srgb, #ff5c5c 55%, transparent) 0%, transparent 60%),
+    radial-gradient(circle at 70% 70%, color-mix(in srgb, #c22e34 65%, transparent) 0%, transparent 65%);
+}
+
+body[data-app-theme="cyber_sweep"] #topBar,
+body[data-app-theme="cyber_sweep"] #sidePanel,
+body[data-app-theme="cyber_sweep"] #stylePanel,
+body[data-app-theme="cyber_sweep"] #statusBar,
+body[data-app-theme="cyber_sweep"] #centerArea {
+  background-image: linear-gradient(100deg, #0b0e13 0%, #0b0e13 38%, #2fb8e0 46%, #ff4fc3 50%, #2fb8e0 54%, #0b0e13 62%, #0b0e13 100%);
+}
+
+body[data-app-theme="astral_aurora"] #topBar,
+body[data-app-theme="astral_aurora"] #sidePanel,
+body[data-app-theme="astral_aurora"] #stylePanel,
+body[data-app-theme="astral_aurora"] #statusBar,
+body[data-app-theme="astral_aurora"] #centerArea {
+  background-image: linear-gradient(120deg, #10163a, #123a52, #1f6a5a, #4a2f7a, #10163a);
+}
+
+body[data-app-theme="molten_aurora"] #topBar,
+body[data-app-theme="molten_aurora"] #sidePanel,
+body[data-app-theme="molten_aurora"] #stylePanel,
+body[data-app-theme="molten_aurora"] #statusBar,
+body[data-app-theme="molten_aurora"] #centerArea {
+  background-image: linear-gradient(120deg, #2a0a1c, #5c1420, #a8281e, #d9522f, #2a0a1c);
+}
+
+body[data-app-theme="galaxy_veil"] #topBar,
+body[data-app-theme="galaxy_veil"] #sidePanel,
+body[data-app-theme="galaxy_veil"] #stylePanel,
+body[data-app-theme="galaxy_veil"] #statusBar,
+body[data-app-theme="galaxy_veil"] #centerArea {
+  background-image:
+    radial-gradient(ellipse 700px 500px at 20% 25%, rgba(124, 95, 224, 0.3), transparent 70%),
+    radial-gradient(ellipse 600px 450px at 78% 72%, rgba(74, 47, 122, 0.28), transparent 70%),
+    radial-gradient(circle 3.5px at 50% 22%, #ffffff 0%, #ffffff 40%, rgba(255, 255, 255, 0.5) 65%, transparent 100%),
+    radial-gradient(circle 3px at 50% 68%, #cbb8ff 0%, #cbb8ff 40%, rgba(203, 184, 255, 0.5) 65%, transparent 100%),
+    radial-gradient(circle 3.5px at 50% 42%, #ffffff 0%, #ffffff 40%, rgba(255, 255, 255, 0.5) 65%, transparent 100%),
+    radial-gradient(circle 3px at 50% 85%, #b4dcff 0%, #b4dcff 40%, rgba(180, 220, 255, 0.5) 65%, transparent 100%);
+}
+
+/* -- Pause every chrome animation while the window is minimized, so the
+      compositor/paint cost drops to near zero instead of running offscreen */
+body[data-app-minimized="1"] #topBar,
+body[data-app-minimized="1"] #sidePanel,
+body[data-app-minimized="1"] #stylePanel,
+body[data-app-minimized="1"] #statusBar,
+body[data-app-minimized="1"] #centerArea,
+body[data-app-minimized="1"] #topBar::before,
+body[data-app-minimized="1"] #topBar::after,
+body[data-app-minimized="1"] #sidePanel::before,
+body[data-app-minimized="1"] #sidePanel::after,
+body[data-app-minimized="1"] #stylePanel::before,
+body[data-app-minimized="1"] #stylePanel::after,
+body[data-app-minimized="1"] #statusBar::before,
+body[data-app-minimized="1"] #statusBar::after,
+body[data-app-minimized="1"] #centerArea::before,
+body[data-app-minimized="1"] #centerArea::after,
+body[data-app-minimized="1"] .theme-swatch.is-animated {
+  animation-play-state: paused;
+}
+
+/* -- Software Settings panel ------------------------------------------- */
+
+#settingsOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 3, 8, 0.72);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+#settingsOverlay.open {
+  display: flex;
+}
+#settingsModal {
+  width: 640px;
+  max-width: calc(100vw - 64px);
+  max-height: calc(100vh - 96px);
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+#settingsModal .settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+#settingsModal .settings-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #f1ebff;
+}
+#settingsModal .settings-close {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 18px;
+  padding: 4px 10px;
+}
+#settingsModal .settings-close:hover {
+  color: var(--text);
+  background: transparent;
+}
+#settingsModal .field-hint {
+  margin-bottom: 18px;
+}
+.theme-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.theme-card {
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  cursor: pointer;
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+}
+.theme-card:hover {
+  border-color: var(--accent-bright);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent-bright) 22%, transparent);
+}
+.theme-card.selected {
+  border-color: var(--accent-bright);
+}
+.theme-swatch {
+  height: 54px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background-size: 320% 320%;
+}
+.theme-swatch.is-animated {
+  animation: appBgDrift 12s ease-in-out infinite;
+}
+.theme-card .theme-name {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.theme-card .theme-tag {
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}

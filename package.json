@@ -1,0 +1,62 @@
+{
+  "name": "streamplan-maker",
+  "version": "1.0.0",
+  "description": "Design and export a personalized weekly stream schedule graphic.",
+  "main": "src/main/main.js",
+  "author": "",
+  "license": "UNLICENSED",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder",
+    "release": "electron-builder --win --publish always"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9",
+    "gifenc": "^1.0.3",
+    "jspdf": "^2.5.2",
+    "jszip": "^3.10.1"
+  },
+  "build": {
+    "appId": "com.streamplanmaker.app",
+    "productName": "Streamplan Maker",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json",
+      "node_modules/jspdf/dist/jspdf.umd.min.js",
+      "node_modules/jszip/dist/jszip.min.js",
+      "node_modules/gifenc/dist/gifenc.esm.js",
+      "node_modules/gifenc/package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "dir"
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "${productName}",
+      "artifactName": "${productName}-Setup-${version}.${ext}",
+      "deleteAppDataOnUninstall": false
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "Staatseigentum",
+      "repo": "streamplan-maker"
+    }
+  }
+}
