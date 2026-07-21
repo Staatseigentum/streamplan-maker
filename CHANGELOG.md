@@ -9,6 +9,9 @@ All notable changes to Streamplan Maker are documented here. Each entry becomes 
 - Any element in the Layout Editor can have its own font uploaded directly from the editor, instead of only the template's global heading/body font.
 - Any element in the Layout Editor can now be animated on its own (Pulse, Drift, Bob, Glow, Spin) — visible live while editing, in the main preview, and in exported GIFs.
 
+### Changed
+- If you're several versions behind, the app now updates straight to the newest version in one step (it already did) and the update-ready popup now shows what changed across every version you skipped, not just the very latest one.
+
 ## [1.0.3] - 2026-07-21
 
 ### Fixed
