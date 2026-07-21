@@ -2,6 +2,15 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.2] - 2026-07-21
+
+### Added
+- 6 new animated templates — Aurora Cascade, Comet Trail, Starlit Ledger, Nova Burst, Meteor Row, and Eclipse Veil — each with its own new layout (Cascade Flow, Orbit Ring, Nova Radiate, Meteor Row) and an animated cosmic background inspired by the app's Galaxy Veil theme.
+- A "Background Motion" option in Customize, so any template can turn on nebula drift, aurora, starfield, nova pulse, or meteor shower motion.
+
+### Changed
+- Animated GIF export no longer adds an automatic glow-pulse/light-sweep to every export — a GIF now only animates from what's actually part of the plan (an animated template background, or your own uploaded GIF stickers).
+
 ## [1.0.1] - 2026-07-21
 
 ### Added
