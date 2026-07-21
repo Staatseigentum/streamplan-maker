@@ -1,6 +1,6 @@
 {
   "name": "streamplan-maker",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Design and export a personalized weekly stream schedule graphic.",
   "main": "src/main/main.js",
   "author": "",

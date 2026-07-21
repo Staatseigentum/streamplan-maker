@@ -245,7 +245,8 @@ html, body {
 input[type="text"],
 input[type="time"],
 input[type="number"],
-select {
+select,
+textarea {
   width: 100%;
   background: var(--card);
   border: 1px solid var(--border-strong);
@@ -256,10 +257,16 @@ select {
   font-family: inherit;
 }
 
+textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
 input[type="text"]:focus,
 input[type="time"]:focus,
 input[type="number"]:focus,
-select:focus {
+select:focus,
+textarea:focus {
   outline: none;
   border-color: var(--border-accent);
 }
@@ -614,9 +621,11 @@ input[type="checkbox"]:checked::after {
   margin: 8px 0;
   word-break: break-all;
 }
-.asset-card .asset-actions {
+.asset-card .asset-actions,
+.layout-editor-sidebar .asset-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 .asset-preview {
   width: 100%;

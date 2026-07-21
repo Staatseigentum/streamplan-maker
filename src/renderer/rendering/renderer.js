@@ -10,6 +10,7 @@ import { getImage } from "./assetImages.js";
 import { drawAnimatedBackground } from "./animatedBackgrounds.js";
 import { isGifPath, getGifStickerFrame } from "./gifSticker.js";
 import { elementRectPx, elementCenterPx } from "../models/customLayout.js";
+import { applyElementAnimation, drawElementGlow } from "./elementAnimations.js";
 
 // One full loop of our own GIF export (24 frames × 80ms) — animated sticker
 // frames are sampled against this timeline when t is driving the render, so
@@ -263,7 +264,362 @@ function drawLogoElement(ctx, rect, style) {
   drawCircularImage(ctx, logoImg, cx, cy, diameter / 2, style.logoOffsetX ?? 0.5, style.logoOffsetY ?? 0.5, style.logoScale ?? 1);
 }
 
-function drawCustomLayout(ctx, activeDays, profile, style, size, highlightRects) {
+// -- Card skins (Layout Editor only) -------------------------------------
+// Alternate visual treatments for a dayCard element, ported from the
+// distinct looks of the built-in variants above but made self-contained to
+// a single given rect (the originals draw within controlled grid/list
+// rects; a free element can reach far more extreme aspect ratios, so every
+// skin below sizes its own decorations off its own rect rather than fixed
+// pixel constants, and drops secondary text (end time, etc.) when there's
+// not clearly room for it instead of letting it overflow).
+
+function drawBadgeCardSkin(ctx, entry, rect, style, highlightRects, stripe = true, rotationInfo = null) {
+  const [x0, y0, x1, y1] = rect;
+  const rectW = x1 - x0;
+  const rectH = y1 - y0;
+  const accent = style.colors.accent || "#FFFFFF";
+  const accent2 = style.colors.accentSecondary || accent;
+  const panel = style.colors.panel || "#1A1A1A";
+  const textPrimary = style.colors.textPrimary || "#FFFFFF";
+  const textSecondary = style.colors.textSecondary || "#AAAAAA";
+
+  drawPanel(ctx, rect, style.cornerStyle, 24, panel, hexToRgba(accent2, 0.4), 2);
+
+  const nodeR = Math.max(14, Math.min(34, Math.min(rectW, rectH) * 0.22));
+  const cx = (x0 + x1) / 2;
+  const nodeCy = y0 + Math.min(26, rectH * 0.18) + nodeR;
+  ctx.beginPath();
+  ctx.arc(cx, nodeCy, nodeR, 0, Math.PI * 2);
+  ctx.fillStyle = hexToRgba(accent, 0.9);
+  ctx.fill();
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = fontString(style.fontBody, Math.min(30, nodeR * 0.85) * style.bodyScale);
+  ctx.fillStyle = "#0A0A0F";
+  ctx.fillText(DAY_LABELS_SHORT[entry.day] || entry.day.slice(0, 3).toUpperCase(), cx, nodeCy);
+
+  let remaining = y1 - (nodeCy + nodeR + 10);
+  if (remaining >= 24) {
+    const timeY = nodeCy + nodeR + Math.min(40, remaining * 0.5);
+    ctx.font = fontString(style.fontHeading, Math.min(40, remaining * 0.4) * style.headingScale, "bold");
+    ctx.fillStyle = textPrimary;
+    ctx.fillText(truncateText(ctx, entry.startTime, rectW - 16), cx, timeY);
+
+    const end = endDisplay(entry);
+    remaining = y1 - (timeY + 20);
+    if (end && remaining >= 20) {
+      const endY = timeY + Math.min(40, remaining);
+      ctx.font = fontString(style.fontBody, 24 * style.bodyScale);
+      ctx.fillStyle = textSecondary;
+      ctx.fillText(truncateText(ctx, end, rectW - 16), cx, endY);
+    }
+  }
+
+  highlightRects.push(
+    rotationInfo ? { rect, rotation: rotationInfo.rotation, cx: rotationInfo.cx, cy: rotationInfo.cy } : rect
+  );
+}
+
+function drawCalendarCardSkin(ctx, entry, rect, style, highlightRects, stripe = true, rotationInfo = null) {
+  const [x0, y0, x1, y1] = rect;
+  const rectW = x1 - x0;
+  const rectH = y1 - y0;
+  const accent = style.colors.accent || "#FFFFFF";
+  const accent2 = style.colors.accentSecondary || accent;
+  const panel = style.colors.panel || "#1A1A1A";
+  const textPrimary = style.colors.textPrimary || "#FFFFFF";
+  const textSecondary = style.colors.textSecondary || "#AAAAAA";
+
+  drawPanel(ctx, rect, style.cornerStyle, 16, panel, hexToRgba(accent2, 0.35), 2);
+
+  const headerH = Math.max(20, Math.min(54, rectH * 0.32));
+  ctx.save();
+  roundedRectPath(ctx, x0, y0, rectW, rectH, layout.cornerRadius(style.cornerStyle, 16));
+  ctx.clip();
+  ctx.fillStyle = hexToRgba(accent, 0.85);
+  ctx.fillRect(x0, y0, rectW, headerH);
+  ctx.restore();
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = fontString(style.fontHeading, Math.min(24, headerH * 0.55) * style.headingScale, "bold");
+  ctx.fillStyle = "#0A0A0F";
+  ctx.fillText(DAY_LABELS_SHORT[entry.day] || entry.day.slice(0, 3).toUpperCase(), (x0 + x1) / 2, y0 + headerH / 2);
+
+  const cx = (x0 + x1) / 2;
+  const remaining = rectH - headerH;
+  if (remaining >= 26) {
+    let ty = y0 + headerH + Math.min(46, remaining * 0.4);
+    ctx.font = fontString(style.fontBody, Math.min(30, remaining * 0.28) * style.bodyScale, "bold");
+    ctx.fillStyle = textPrimary;
+    ctx.fillText(truncateText(ctx, entry.startTime, rectW - 16), cx, ty);
+
+    const end = endDisplay(entry);
+    if (end && y1 - ty >= 24) {
+      ty += Math.min(32, (y1 - ty) * 0.6);
+      ctx.font = fontString(style.fontBody, 19 * style.bodyScale);
+      ctx.fillStyle = textSecondary;
+      ctx.fillText(truncateText(ctx, end, rectW - 16), cx, ty);
+    }
+  }
+
+  highlightRects.push(
+    rotationInfo ? { rect, rotation: rotationInfo.rotation, cx: rotationInfo.cx, cy: rotationInfo.cy } : rect
+  );
+}
+
+function drawTicketCardSkin(ctx, entry, rect, style, highlightRects, stripe = true, rotationInfo = null) {
+  const [rx0, ry0, rx1, ry1] = rect;
+  const rectW = rx1 - rx0;
+  const rectH = ry1 - ry0;
+  const accent = style.colors.accent || "#FFFFFF";
+  const accent2 = style.colors.accentSecondary || accent;
+  const panel = style.colors.panel || "#1A1A1A";
+  const textPrimary = style.colors.textPrimary || "#FFFFFF";
+  const textSecondary = style.colors.textSecondary || "#AAAAAA";
+
+  drawPanel(ctx, rect, style.cornerStyle, 14, panel, hexToRgba(accent2, 0.4), 2);
+
+  const stubW = Math.max(30, Math.min(76, rectW * 0.28));
+  drawPanel(ctx, [rx0, ry0, rx0 + stubW, ry1], style.cornerStyle, 14, hexToRgba(accent, 0.85), null, 0);
+
+  ctx.save();
+  ctx.strokeStyle = hexToRgba(style.colors.background || "#0A0A0F", 0.9);
+  ctx.lineWidth = 3;
+  ctx.setLineDash([6, 6]);
+  ctx.beginPath();
+  ctx.moveTo(rx0 + stubW, ry0 + 6);
+  ctx.lineTo(rx0 + stubW, ry1 - 6);
+  ctx.stroke();
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(rx0 + stubW / 2, (ry0 + ry1) / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = fontString(style.fontHeading, Math.min(26, stubW * 0.55, rectH * 0.4) * style.headingScale, "bold");
+  ctx.fillStyle = "#0A0A0F";
+  ctx.fillText(DAY_LABELS_SHORT[entry.day] || entry.day.slice(0, 3).toUpperCase(), 0, 0);
+  ctx.restore();
+
+  const bodyX0 = rx0 + stubW + 20;
+  const midY = (ry0 + ry1) / 2;
+  if (rx1 - bodyX0 >= 40) {
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.font = fontString(style.fontBody, Math.min(30, rectH * 0.3) * style.bodyScale);
+    ctx.fillStyle = textPrimary;
+    ctx.fillText(truncateText(ctx, entry.startTime, rx1 - bodyX0 - 12), bodyX0, midY - Math.min(14, rectH * 0.15));
+
+    const end = endDisplay(entry);
+    if (end && rectH >= 60) {
+      ctx.font = fontString(style.fontBody, 19 * style.bodyScale);
+      ctx.fillStyle = textSecondary;
+      ctx.fillText(
+        truncateText(ctx, entry.endTime ? `until ${end}` : end, rx1 - bodyX0 - 12),
+        bodyX0,
+        midY + Math.min(18, rectH * 0.18)
+      );
+    }
+  }
+
+  highlightRects.push(
+    rotationInfo ? { rect, rotation: rotationInfo.rotation, cx: rotationInfo.cx, cy: rotationInfo.cy } : rect
+  );
+}
+
+// Rewritten from drawCompactBadgesVariant's inline pill: the original
+// measures its content and GROWS the pill to fit; a free element has a
+// fixed rect it must fit within instead, so this truncates content that
+// doesn't fit rather than expanding the shape.
+function drawCompactCardSkin(ctx, entry, rect, style, highlightRects, stripe = true, rotationInfo = null) {
+  const [x0, y0, x1, y1] = rect;
+  const rectW = x1 - x0;
+  const rectH = y1 - y0;
+  const accent = style.colors.accent || "#FFFFFF";
+  const panel = style.colors.panel || "#1A1A1A";
+  const textPrimary = style.colors.textPrimary || "#FFFFFF";
+  const textSecondary = style.colors.textSecondary || "#AAAAAA";
+
+  drawPanel(ctx, rect, "pill", 0, panel, hexToRgba(accent, 0.4), 2);
+
+  const padX = Math.max(10, Math.min(26, rectW * 0.08));
+  const midY = (y0 + y1) / 2;
+  let tx = x0 + padX;
+  const maxTx = x1 - padX;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+
+  ctx.font = fontString(style.fontHeading, Math.min(30, rectH * 0.4) * style.headingScale, "bold");
+  ctx.fillStyle = accent;
+  const dayLabel = DAY_LABELS_SHORT[entry.day] || entry.day.slice(0, 3).toUpperCase();
+  const dayText = truncateText(ctx, dayLabel, Math.max(0, maxTx - tx));
+  ctx.fillText(dayText, tx, midY);
+  tx += ctx.measureText(dayText + "  ").width;
+
+  if (maxTx - tx > 20) {
+    const end = endDisplay(entry);
+    const timeText = end ? `${entry.startTime}–${end}` : entry.startTime;
+    ctx.font = fontString(style.fontBody, Math.min(30, rectH * 0.35) * style.bodyScale);
+    ctx.fillStyle = textPrimary;
+    const shownTime = truncateText(ctx, timeText, maxTx - tx);
+    ctx.fillText(shownTime, tx, midY);
+    tx += ctx.measureText(shownTime).width;
+  }
+
+  if (entry.label && maxTx - tx > 20) {
+    ctx.fillStyle = textSecondary;
+    ctx.fillText(truncateText(ctx, "  ·  " + entry.label, maxTx - tx), tx, midY);
+  }
+
+  highlightRects.push(
+    rotationInfo ? { rect, rotation: rotationInfo.rotation, cx: rotationInfo.cx, cy: rotationInfo.cy } : rect
+  );
+}
+
+function drawRingCardSkin(ctx, entry, rect, style, highlightRects, stripe = true, rotationInfo = null) {
+  const [x0, y0, x1, y1] = rect;
+  const rectW = x1 - x0;
+  const accent = style.colors.accent || "#FFFFFF";
+  const accent2 = style.colors.accentSecondary || accent;
+  const textPrimary = style.colors.textPrimary || "#FFFFFF";
+  const textSecondary = style.colors.textSecondary || "#AAAAAA";
+  const rectH = y1 - y0;
+
+  const cx = (x0 + x1) / 2;
+  const nodeR = Math.max(18, Math.min(40, Math.min(rectW, rectH * 0.6) * 0.42));
+  const cy = y0 + nodeR + Math.min(10, rectH * 0.08);
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, nodeR, 0, Math.PI * 2);
+  ctx.fillStyle = hexToRgba(accent, 0.92);
+  ctx.fill();
+  ctx.strokeStyle = hexToRgba(accent2, 0.6);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = fontString(style.fontHeading, Math.min(22, nodeR * 0.6) * style.headingScale, "bold");
+  ctx.fillStyle = "#0A0A0F";
+  ctx.fillText(DAY_LABELS_SHORT[entry.day] || entry.day.slice(0, 3).toUpperCase(), cx, cy);
+
+  let remaining = y1 - (cy + nodeR + 8);
+  if (remaining >= 24) {
+    let ty = cy + nodeR + Math.min(30, remaining * 0.5);
+    ctx.font = fontString(style.fontBody, Math.min(24, remaining * 0.4) * style.bodyScale, "bold");
+    ctx.fillStyle = textPrimary;
+    ctx.fillText(truncateText(ctx, entry.startTime, rectW - 16), cx, ty);
+
+    const end = endDisplay(entry);
+    remaining = y1 - (ty + 16);
+    if (end && remaining >= 18) {
+      ty += Math.min(26, remaining);
+      ctx.font = fontString(style.fontBody, 16 * style.bodyScale);
+      ctx.fillStyle = textSecondary;
+      ctx.fillText(truncateText(ctx, end, rectW - 16), cx, ty);
+    }
+  }
+
+  highlightRects.push(
+    rotationInfo ? { rect, rotation: rotationInfo.rotation, cx: rotationInfo.cx, cy: rotationInfo.cy } : rect
+  );
+}
+
+const CARD_SKIN_DRAWERS = {
+  badge: drawBadgeCardSkin,
+  calendar: drawCalendarCardSkin,
+  ticket: drawTicketCardSkin,
+  compact: drawCompactCardSkin,
+  ring: drawRingCardSkin,
+};
+
+// -- Freeform elements (Layout Editor "+ Text"/"+ Shape"/"+ Image") ------
+
+function drawTextElement(ctx, rect, el, style) {
+  const [x0, y0, x1, y1] = rect;
+  const rectW = x1 - x0;
+  const rectH = y1 - y0;
+  const size = (el.fontSize || 0.03) * CANVAS_HEIGHT;
+  const color = el.color || style.colors.textPrimary || "#FFFFFF";
+  const font = el.fontFamily ? { family: el.fontFamily } : style.fontBody;
+
+  ctx.font = fontString(font, size);
+  ctx.fillStyle = color;
+  ctx.textBaseline = "middle";
+  const align = el.align || "center";
+  ctx.textAlign = align;
+  const anchorX = align === "left" ? x0 : align === "right" ? x1 : (x0 + x1) / 2;
+
+  const lineH = size * 1.25;
+  const maxLines = Math.max(1, Math.floor(rectH / lineH));
+  const lines = wrapText(ctx, el.text || "", rectW, maxLines);
+  let ly = (y0 + y1) / 2 - ((lines.length - 1) * lineH) / 2;
+  lines.forEach((line) => {
+    ctx.fillText(line, anchorX, ly);
+    ly += lineH;
+  });
+}
+
+function drawShapeElement(ctx, rect, el) {
+  const [x0, y0, x1, y1] = rect;
+  const fill = el.fillColor;
+  const stroke = el.strokeColor;
+  const strokeWidth = el.strokeWidth || 0;
+
+  if (el.shapeKind === "ellipse") {
+    ctx.beginPath();
+    ctx.ellipse((x0 + x1) / 2, (y0 + y1) / 2, Math.max(0, (x1 - x0) / 2), Math.max(0, (y1 - y0) / 2), 0, 0, Math.PI * 2);
+    if (fill) {
+      ctx.fillStyle = fill;
+      ctx.fill();
+    }
+    if (stroke && strokeWidth > 0) {
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = strokeWidth;
+      ctx.stroke();
+    }
+  } else if (el.shapeKind === "line") {
+    ctx.beginPath();
+    ctx.moveTo(x0, (y0 + y1) / 2);
+    ctx.lineTo(x1, (y0 + y1) / 2);
+    ctx.strokeStyle = stroke || fill || "#FFFFFF";
+    ctx.lineWidth = strokeWidth > 0 ? strokeWidth : 4;
+    ctx.stroke();
+  } else {
+    roundedRectPath(ctx, x0, y0, x1 - x0, y1 - y0, layout.cornerRadius(el.cornerStyle, 12));
+    if (fill) {
+      ctx.fillStyle = fill;
+      ctx.fill();
+    }
+    if (stroke && strokeWidth > 0) {
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = strokeWidth;
+      ctx.stroke();
+    }
+  }
+}
+
+// `elapsedSeconds` mirrors renderStreamplan's sticker-frame clock (see
+// STICKER_LOOP_SECONDS below) so an animated GIF image element stays in
+// sync with GIF stickers/backgrounds instead of running on its own clock.
+function drawImageElement(ctx, rect, el, elapsedSeconds) {
+  if (!el.imagePath) return;
+  const [x0, y0, x1, y1] = rect;
+  let source = null;
+  if (isGifPath(el.imagePath)) {
+    const gifFrame = getGifStickerFrame(el.imagePath, elapsedSeconds);
+    if (gifFrame) source = gifFrame.frame;
+  } else {
+    source = getImage(el.imagePath);
+  }
+  if (!source) return;
+  drawImageCover(ctx, source, x0, y0, x1 - x0, y1 - y0);
+}
+
+function drawCustomLayout(ctx, activeDays, profile, style, size, highlightRects, t, elapsedSeconds) {
   const elements = style.customLayout.elements;
   const activeByDay = new Map(activeDays.map((entry) => [entry.day, entry]));
 
@@ -280,20 +636,22 @@ function drawCustomLayout(ctx, activeDays, profile, style, size, highlightRects)
     const [cx, cy] = elementCenterPx(el, size);
     const rotation = el.rotation || 0;
 
-    // Per-element style overrides (corner shape, accent color) are applied
+    // Per-element style overrides (corner shape, accent/font) are applied
     // by shallow-cloning the template's style just for this one draw call —
-    // drawDayCard/drawHeaderElement already read cornerStyle/colors.accent
-    // off whatever style object they're given, so no changes were needed
-    // there; a fresh element with no overrides renders byte-identical to
-    // before (effectiveStyle === style).
-    const effectiveStyle =
-      el.cornerStyle || el.accentColor
-        ? {
-            ...style,
-            cornerStyle: el.cornerStyle || style.cornerStyle,
-            colors: el.accentColor ? { ...style.colors, accent: el.accentColor } : style.colors,
-          }
-        : style;
+    // drawDayCard/drawHeaderElement already read cornerStyle/colors.accent/
+    // fontHeading/fontBody off whatever style object they're given, so no
+    // signature changes were needed there; a fresh element with no
+    // overrides renders byte-identical to before (effectiveStyle === style).
+    const hasOverride = el.cornerStyle || el.accentColor || el.fontFamily;
+    const effectiveStyle = hasOverride
+      ? {
+          ...style,
+          cornerStyle: el.cornerStyle || style.cornerStyle,
+          colors: el.accentColor ? { ...style.colors, accent: el.accentColor } : style.colors,
+          fontHeading: el.fontFamily ? { family: el.fontFamily } : style.fontHeading,
+          fontBody: el.fontFamily ? { family: el.fontFamily } : style.fontBody,
+        }
+      : style;
 
     ctx.save();
     ctx.globalAlpha = el.opacity ?? 1;
@@ -302,15 +660,25 @@ function drawCustomLayout(ctx, activeDays, profile, style, size, highlightRects)
       ctx.rotate((rotation * Math.PI) / 180);
       ctx.translate(-cx, -cy);
     }
+    applyElementAnimation(ctx, t, el);
 
     if (el.type === "dayCard") {
       const entry = activeByDay.get(el.id) || { day: el.id, startTime: "Day Off", endTime: null, durationMinutes: null, label: null };
-      drawDayCard(ctx, entry, rect, effectiveStyle, highlightRects, el.showStripe ?? true, rotation ? { rotation, cx, cy } : null);
+      const drawSkin = CARD_SKIN_DRAWERS[el.cardStyle] || drawDayCard;
+      drawSkin(ctx, entry, rect, effectiveStyle, highlightRects, el.showStripe ?? true, rotation ? { rotation, cx, cy } : null);
     } else if (el.type === "header") {
       drawHeaderElement(ctx, rect, profile, effectiveStyle, highlightRects, rotation ? { rotation, cx, cy } : null);
     } else if (el.type === "logo") {
       drawLogoElement(ctx, rect, style);
+    } else if (el.type === "text") {
+      drawTextElement(ctx, rect, el, effectiveStyle);
+    } else if (el.type === "shape") {
+      drawShapeElement(ctx, rect, el);
+    } else if (el.type === "image") {
+      drawImageElement(ctx, rect, el, elapsedSeconds);
     }
+
+    drawElementGlow(ctx, t, el, rect, effectiveStyle);
 
     ctx.restore();
   });
@@ -1025,8 +1393,18 @@ export function renderStreamplan(canvas, profile, style, t = null, outputSize = 
   const highlightRects = [];
   const activeDays = sortedDays(profile);
 
+  // t !== null means we're on an animation timeline (GIF export) — sample
+  // sticker/image-element frames against that same clock so motion stays in
+  // sync. Otherwise (a plain static preview/export snapshot, or the Layout
+  // Editor's live draft) fall back to real wall-clock time so uploaded GIFs
+  // and per-element animation still visibly animate while the user is just
+  // looking at / editing the plan. Hoisted above the branch below so a
+  // custom layout's own image elements share this exact clock with the
+  // style.customImages sticker loop further down.
+  const stickerElapsedSeconds = t !== null ? t * STICKER_LOOP_SECONDS : performance.now() / 1000;
+
   if (style.customLayout && style.customLayout.elements?.length) {
-    drawCustomLayout(ctx, activeDays, profile, style, size, highlightRects);
+    drawCustomLayout(ctx, activeDays, profile, style, size, highlightRects, t, stickerElapsedSeconds);
   } else {
     const headerRect = layout.computeHeaderRect(size);
     drawHeader(ctx, size, profile, style, headerRect, highlightRects);
@@ -1037,12 +1415,6 @@ export function renderStreamplan(canvas, profile, style, t = null, outputSize = 
     drawVariant(ctx, activeDays, style, contentArea, highlightRects);
   }
 
-  // t !== null means we're on an animation timeline (live glow preview or
-  // GIF export) — sample sticker frames against that same clock so motion
-  // stays in sync. Otherwise (a plain static preview/export snapshot) fall
-  // back to real wall-clock time so an uploaded GIF still visibly animates
-  // while the user is just looking at / editing the plan.
-  const stickerElapsedSeconds = t !== null ? t * STICKER_LOOP_SECONDS : performance.now() / 1000;
   (style.customImages || []).forEach((sticker) => {
     if (isGifPath(sticker.path)) {
       const gifFrame = getGifStickerFrame(sticker.path, stickerElapsedSeconds);

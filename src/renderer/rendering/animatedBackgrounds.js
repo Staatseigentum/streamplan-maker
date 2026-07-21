@@ -38,7 +38,7 @@ const STARS = makePoints(110, 1337);
 const EMBERS = makePoints(26, 4242);
 const METEORS = makePoints(6, 777);
 
-function resolvePhase(t) {
+export function resolvePhase(t) {
   if (t !== null) return t;
   return (performance.now() / 1000 / WALL_CLOCK_LOOP_SECONDS) % 1;
 }

@@ -2,6 +2,13 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.4] - 2026-07-21
+
+### Added
+- The Layout Editor is now much more free-form: day cards can borrow the visual look of the app's other layouts (Badge Node, Calendar Cell, Ticket Stub, Compact Inline, Ring Badge — a new "Card Skin" option per card), and you can now add your own Text, Shape, and Image elements anywhere on the canvas alongside the day cards, header, and logo.
+- Any element in the Layout Editor can have its own font uploaded directly from the editor, instead of only the template's global heading/body font.
+- Any element in the Layout Editor can now be animated on its own (Pulse, Drift, Bob, Glow, Spin) — visible live while editing, in the main preview, and in exported GIFs.
+
 ## [1.0.3] - 2026-07-21
 
 ### Fixed

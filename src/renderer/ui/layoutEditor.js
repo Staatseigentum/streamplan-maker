@@ -9,7 +9,16 @@
 import { CANVAS_WIDTH, CANVAS_HEIGHT, DAY_NAMES, DAY_LABELS_SHORT, LAYOUT_FILE_EXTENSION } from "../../shared/constants.js";
 import { createStreamerProfile, createDayEntry } from "../models/schedule.js";
 import { renderStreamplan } from "../rendering/renderer.js";
-import { buildDefaultCustomLayoutElements, sanitizeCustomLayout } from "../models/customLayout.js";
+import {
+  buildDefaultCustomLayoutElements,
+  sanitizeCustomLayout,
+  createFreeformElement,
+  CUSTOM_LAYOUT_ELEMENT_IDS,
+  FREEFORM_ELEMENT_TYPES,
+  CARD_STYLES,
+  ELEMENT_ANIM_STYLES,
+  ELEMENT_ANIM_INTENSITIES,
+} from "../models/customLayout.js";
 import {
   listCustomLayouts,
   getCustomLayout,
@@ -17,6 +26,26 @@ import {
   updateCustomLayout,
   removeCustomLayout,
 } from "../models/customLayoutLibrary.js";
+import { addCustomFontToLibrary, listCustomFonts } from "../rendering/fontLibrary.js";
+
+const CARD_STYLE_LABELS = {
+  classic: "Classic",
+  badge: "Badge Node",
+  calendar: "Calendar Cell",
+  ticket: "Ticket Stub",
+  compact: "Compact Inline",
+  ring: "Ring Badge",
+};
+const ANIM_STYLE_LABELS = {
+  none: "None",
+  pulse: "Pulse",
+  drift: "Drift",
+  bob: "Bob",
+  glow: "Glow",
+  spin: "Spin",
+};
+const ANIM_INTENSITY_LABELS = { low: "Low", med: "Medium", high: "High" };
+const ANIM_TICK_MS = 1000 / 30;
 
 // All 7 days populated (unlike the 3-day gallery-thumbnail sample) so every
 // day card is always visible/draggable while editing, regardless of what the
@@ -30,6 +59,16 @@ const SAMPLE_PROFILE = createStreamerProfile({
 
 function clamp(v, min, max) {
   return Math.min(max, Math.max(min, v));
+}
+
+function elementLabel(el) {
+  if (el.type === "dayCard") return DAY_LABELS_SHORT[el.id] || el.id;
+  if (el.type === "header") return "Header";
+  if (el.type === "logo") return "Logo";
+  if (el.type === "text") return (el.text || "Text").slice(0, 20);
+  if (el.type === "shape") return "Shape";
+  if (el.type === "image") return "Image";
+  return el.type;
 }
 
 function sanitizeFilename(name) {
@@ -108,6 +147,31 @@ export class LayoutEditor {
       this._renderOverlay();
     });
     toolbar.appendChild(newBtn);
+
+    const addTextBtn = document.createElement("button");
+    addTextBtn.textContent = "+ Text";
+    addTextBtn.addEventListener("click", () => this._addFreeformElement("text"));
+    toolbar.appendChild(addTextBtn);
+
+    const addShapeBtn = document.createElement("button");
+    addShapeBtn.textContent = "+ Shape";
+    addShapeBtn.addEventListener("click", () => this._addFreeformElement("shape"));
+    toolbar.appendChild(addShapeBtn);
+
+    const addImageBtn = document.createElement("button");
+    addImageBtn.textContent = "+ Image…";
+    addImageBtn.addEventListener("click", async () => {
+      let path;
+      try {
+        path = await window.streamplanAPI.chooseAssetPath("sticker");
+      } catch (err) {
+        await window.streamplanAPI.showMessage("error", "Import failed", `Could not open the file dialog: ${err.message}`);
+        return;
+      }
+      if (!path) return;
+      this._addFreeformElement("image", { imagePath: path });
+    });
+    toolbar.appendChild(addImageBtn);
 
     const spacer = document.createElement("div");
     spacer.className = "layout-editor-toolbar-spacer";
@@ -378,6 +442,354 @@ export class LayoutEditor {
     sendBackBtn.addEventListener("click", () => this._sendToBack(this._selectedId));
     this.zOrderRow.append(bringFrontBtn, sendBackBtn);
     this.propFields.appendChild(this.zOrderRow);
+
+    this._buildCardStyleSection();
+    this._buildFontSection();
+    this._buildAnimationSection();
+    this._buildTextSection();
+    this._buildShapeSection();
+    this._buildImageSection();
+    this._buildDeleteSection();
+  }
+
+  // Small local variant of the shared makeNumberRow above, but appending
+  // into an arbitrary container (a type-specific field group) instead of
+  // always this.propFields directly, and returning the wrapper div too so
+  // callers can toggle its visibility per element type.
+  _appendNumberRow(container, labelText, min, max, step, onChange) {
+    const wrap = document.createElement("div");
+    wrap.style.marginBottom = "12px";
+    const label = document.createElement("label");
+    label.className = "field-label";
+    label.textContent = labelText;
+    wrap.appendChild(label);
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = String(min);
+    input.max = String(max);
+    input.step = String(step);
+    input.addEventListener("input", () => {
+      const v = Number(input.value);
+      if (Number.isFinite(v)) onChange(v);
+    });
+    wrap.appendChild(input);
+    container.appendChild(wrap);
+    return { wrap, input };
+  }
+
+  _appendSelectRow(container, labelText, options, onChange) {
+    const wrap = document.createElement("div");
+    wrap.style.marginBottom = "12px";
+    const label = document.createElement("label");
+    label.className = "field-label";
+    label.textContent = labelText;
+    wrap.appendChild(label);
+    const select = document.createElement("select");
+    options.forEach(([value, text]) => {
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = text;
+      select.appendChild(opt);
+    });
+    select.addEventListener("change", () => onChange(select.value));
+    wrap.appendChild(select);
+    container.appendChild(wrap);
+    return { wrap, select };
+  }
+
+  _appendColorRow(container, labelText, onChange, onReset) {
+    const wrap = document.createElement("div");
+    wrap.style.marginBottom = "12px";
+    const label = document.createElement("label");
+    label.className = "field-label";
+    label.textContent = labelText;
+    wrap.appendChild(label);
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.gap = "8px";
+    row.style.alignItems = "center";
+    const input = document.createElement("input");
+    input.type = "color";
+    input.className = "color-swatch";
+    input.addEventListener("input", () => onChange(input.value));
+    row.appendChild(input);
+    if (onReset) {
+      const resetBtn = document.createElement("button");
+      resetBtn.textContent = "Reset";
+      resetBtn.addEventListener("click", onReset);
+      row.appendChild(resetBtn);
+    }
+    wrap.appendChild(row);
+    container.appendChild(wrap);
+    return { wrap, input };
+  }
+
+  // DayCard-only: lets a card borrow the visual look of one of the app's
+  // other built-in layouts instead of the plain default panel.
+  _buildCardStyleSection() {
+    const header = document.createElement("div");
+    header.className = "section-header";
+    header.textContent = "Card Skin";
+    this.cardSkinSectionHeader = header;
+    this.propFields.appendChild(header);
+    const { wrap, select } = this._appendSelectRow(
+      this.propFields,
+      "Skin",
+      CARD_STYLES.map((v) => [v === "classic" ? "" : v, CARD_STYLE_LABELS[v]]),
+      (value) => this._setSelectedField("cardStyle", value || null)
+    );
+    this.cardStyleWrap = wrap;
+    this.cardStyleSelect = select;
+  }
+
+  // Font override — meaningful for dayCard/header/text (anything that
+  // draws text) — mirrors assetsTab.js's buildFontAssetCard upload/reset
+  // pattern, plus a dropdown of already-uploaded fonts so one doesn't need
+  // to be re-picked from disk if it's already in the library.
+  _buildFontSection() {
+    const header = document.createElement("div");
+    header.className = "section-header";
+    header.textContent = "Font";
+    this.fontSectionHeader = header;
+    this.propFields.appendChild(header);
+
+    this.fontWrap = document.createElement("div");
+    this.fontWrap.style.marginBottom = "12px";
+
+    this.fontFilenameEl = document.createElement("div");
+    this.fontFilenameEl.className = "field-hint";
+    this.fontWrap.appendChild(this.fontFilenameEl);
+
+    this.fontLibrarySelect = document.createElement("select");
+    this.fontLibrarySelect.title = "Use an already-uploaded font";
+    this.fontLibrarySelect.addEventListener("change", () => {
+      const path = this.fontLibrarySelect.value;
+      if (!path) return;
+      const entry = listCustomFonts().find((f) => f.path === path);
+      if (!entry) return;
+      this._setSelectedField("fontFamily", entry.family);
+      this._setSelectedField("fontPath", entry.path);
+      this._refreshPropertyPanel();
+    });
+    this.fontWrap.appendChild(this.fontLibrarySelect);
+
+    const fontBtnRow = document.createElement("div");
+    fontBtnRow.className = "asset-actions";
+    fontBtnRow.style.marginTop = "6px";
+    const fontUploadBtn = document.createElement("button");
+    fontUploadBtn.textContent = "Upload Font…";
+    fontUploadBtn.addEventListener("click", async () => {
+      const prevText = fontUploadBtn.textContent;
+      fontUploadBtn.disabled = true;
+      fontUploadBtn.textContent = "Loading…";
+      try {
+        const path = await window.streamplanAPI.chooseAssetPath("font");
+        if (path) {
+          const entry = await addCustomFontToLibrary(path);
+          this._setSelectedField("fontFamily", entry.family);
+          this._setSelectedField("fontPath", entry.path);
+          this._refreshFontLibrarySelect();
+          this._refreshPropertyPanel();
+        }
+      } catch (err) {
+        await window.streamplanAPI.showMessage("error", "Font upload failed", err.message);
+      } finally {
+        fontUploadBtn.disabled = false;
+        fontUploadBtn.textContent = prevText;
+      }
+    });
+    const fontResetBtn = document.createElement("button");
+    fontResetBtn.textContent = "Use Template Font";
+    fontResetBtn.addEventListener("click", () => {
+      this._setSelectedField("fontFamily", null);
+      this._setSelectedFieldSilent("fontPath", null);
+      this._refreshPropertyPanel();
+    });
+    fontBtnRow.append(fontUploadBtn, fontResetBtn);
+    this.fontWrap.appendChild(fontBtnRow);
+    this.propFields.appendChild(this.fontWrap);
+  }
+
+  _refreshFontLibrarySelect() {
+    if (!this.fontLibrarySelect) return;
+    const current = this.fontLibrarySelect.value;
+    this.fontLibrarySelect.innerHTML = "";
+    const blank = document.createElement("option");
+    blank.value = "";
+    blank.textContent = "— pick from library —";
+    this.fontLibrarySelect.appendChild(blank);
+    listCustomFonts().forEach((entry) => {
+      const opt = document.createElement("option");
+      opt.value = entry.path;
+      opt.textContent = entry.displayName;
+      this.fontLibrarySelect.appendChild(opt);
+    });
+    this.fontLibrarySelect.value = current && listCustomFonts().some((f) => f.path === current) ? current : "";
+  }
+
+  // All element types can be animated.
+  _buildAnimationSection() {
+    const header = document.createElement("div");
+    header.className = "section-header";
+    header.textContent = "Animation";
+    this.propFields.appendChild(header);
+    const { wrap: animWrap, select: animSelect } = this._appendSelectRow(
+      this.propFields,
+      "Style",
+      ELEMENT_ANIM_STYLES.map((v) => [v === "none" ? "" : v, ANIM_STYLE_LABELS[v]]),
+      (value) => this._setSelectedField("animStyle", value || null)
+    );
+    this.animWrap = animWrap;
+    this.animSelect = animSelect;
+    const { wrap: intensityWrap, select: intensitySelect } = this._appendSelectRow(
+      this.propFields,
+      "Intensity",
+      ELEMENT_ANIM_INTENSITIES.map((v) => [v, ANIM_INTENSITY_LABELS[v]]),
+      (value) => this._setSelectedField("animIntensity", value)
+    );
+    this.animIntensityWrap = intensityWrap;
+    this.animIntensitySelect = intensitySelect;
+  }
+
+  // Text-only: content, alignment, color, size.
+  _buildTextSection() {
+    this.textFieldsWrap = document.createElement("div");
+    const header = document.createElement("div");
+    header.className = "section-header";
+    header.textContent = "Text Content";
+    this.textFieldsWrap.appendChild(header);
+
+    const textAreaWrap = document.createElement("div");
+    textAreaWrap.style.marginBottom = "12px";
+    const textLabel = document.createElement("label");
+    textLabel.className = "field-label";
+    textLabel.textContent = "Text";
+    textAreaWrap.appendChild(textLabel);
+    this.textArea = document.createElement("textarea");
+    this.textArea.rows = 3;
+    this.textArea.addEventListener("input", () => this._setSelectedField("text", this.textArea.value));
+    textAreaWrap.appendChild(this.textArea);
+    this.textFieldsWrap.appendChild(textAreaWrap);
+
+    const { select: alignSelect } = this._appendSelectRow(
+      this.textFieldsWrap,
+      "Alignment",
+      [
+        ["left", "Left"],
+        ["center", "Center"],
+        ["right", "Right"],
+      ],
+      (value) => this._setSelectedField("align", value)
+    );
+    this.textAlignSelect = alignSelect;
+
+    const { input: colorInput } = this._appendColorRow(
+      this.textFieldsWrap,
+      "Text Color",
+      (value) => this._setSelectedField("color", value),
+      () => this._setSelectedField("color", null)
+    );
+    this.textColorInput = colorInput;
+
+    const { input: sizeInput } = this._appendNumberRow(this.textFieldsWrap, "Font Size (% of canvas height)", 1, 30, 0.5, (v) =>
+      this._setSelectedField("fontSize", v / 100)
+    );
+    this.textSizeInput = sizeInput;
+
+    this.propFields.appendChild(this.textFieldsWrap);
+  }
+
+  // Shape-only: kind, fill, stroke.
+  _buildShapeSection() {
+    this.shapeFieldsWrap = document.createElement("div");
+    const header = document.createElement("div");
+    header.className = "section-header";
+    header.textContent = "Shape";
+    this.shapeFieldsWrap.appendChild(header);
+
+    const { select: kindSelect } = this._appendSelectRow(
+      this.shapeFieldsWrap,
+      "Shape",
+      [
+        ["rect", "Rectangle"],
+        ["ellipse", "Ellipse"],
+        ["line", "Line"],
+      ],
+      (value) => this._setSelectedField("shapeKind", value)
+    );
+    this.shapeKindSelect = kindSelect;
+
+    const { input: fillInput } = this._appendColorRow(
+      this.shapeFieldsWrap,
+      "Fill Color",
+      (value) => this._setSelectedField("fillColor", value),
+      () => this._setSelectedField("fillColor", null)
+    );
+    this.shapeFillInput = fillInput;
+
+    const { input: strokeInput } = this._appendColorRow(
+      this.shapeFieldsWrap,
+      "Stroke Color",
+      (value) => this._setSelectedField("strokeColor", value),
+      () => this._setSelectedField("strokeColor", null)
+    );
+    this.shapeStrokeInput = strokeInput;
+
+    const { input: strokeWidthInput } = this._appendNumberRow(this.shapeFieldsWrap, "Stroke Width (px)", 0, 60, 1, (v) =>
+      this._setSelectedField("strokeWidth", v)
+    );
+    this.shapeStrokeWidthInput = strokeWidthInput;
+
+    this.propFields.appendChild(this.shapeFieldsWrap);
+  }
+
+  // Image-only: upload/replace the source file.
+  _buildImageSection() {
+    this.imageFieldsWrap = document.createElement("div");
+    const header = document.createElement("div");
+    header.className = "section-header";
+    header.textContent = "Image";
+    this.imageFieldsWrap.appendChild(header);
+
+    this.imageFilenameEl = document.createElement("div");
+    this.imageFilenameEl.className = "field-hint";
+    this.imageFieldsWrap.appendChild(this.imageFilenameEl);
+
+    const imageBtnRow = document.createElement("div");
+    imageBtnRow.className = "asset-actions";
+    imageBtnRow.style.marginTop = "6px";
+    const imageUploadBtn = document.createElement("button");
+    imageUploadBtn.textContent = "Replace Image…";
+    imageUploadBtn.addEventListener("click", async () => {
+      let path;
+      try {
+        path = await window.streamplanAPI.chooseAssetPath("sticker");
+      } catch (err) {
+        await window.streamplanAPI.showMessage("error", "Import failed", `Could not open the file dialog: ${err.message}`);
+        return;
+      }
+      if (path) {
+        this._setSelectedField("imagePath", path);
+        this._refreshPropertyPanel();
+      }
+    });
+    imageBtnRow.appendChild(imageUploadBtn);
+    this.imageFieldsWrap.appendChild(imageBtnRow);
+
+    this.propFields.appendChild(this.imageFieldsWrap);
+  }
+
+  // Only freeform (text/shape/image) elements can be deleted — the 9
+  // fixed day-card/header/logo slots are a permanent part of every layout.
+  _buildDeleteSection() {
+    this.deleteWrap = document.createElement("div");
+    this.deleteWrap.style.marginTop = "18px";
+    this.deleteElementBtn = document.createElement("button");
+    this.deleteElementBtn.className = "danger";
+    this.deleteElementBtn.textContent = "🗑 Delete Element";
+    this.deleteElementBtn.addEventListener("click", () => this._deleteSelectedElement());
+    this.deleteWrap.appendChild(this.deleteElementBtn);
+    this.propFields.appendChild(this.deleteWrap);
   }
 
   _setSelectedField(field, rawValue) {
@@ -410,6 +822,27 @@ export class LayoutEditor {
     if (idx <= 0) return;
     const [el] = this._draftElements.splice(idx, 1);
     this._draftElements.unshift(el);
+    this._renderCanvas();
+    this._renderOverlay();
+  }
+
+  // Freeform elements (text/shape/image) are additions on top of the fixed
+  // 9 — any number can be added/removed, unlike the day cards/header/logo.
+  _addFreeformElement(type, overrides = {}) {
+    const el = createFreeformElement(type, overrides);
+    this._draftElements.push(el);
+    this._renderCanvas();
+    this._renderOverlay();
+    this._selectElement(el.id);
+  }
+
+  _deleteSelectedElement() {
+    const id = this._selectedId;
+    if (!id || CUSTOM_LAYOUT_ELEMENT_IDS.includes(id)) return; // the fixed 9 can't be deleted, only freeform extras
+    const idx = this._draftElements.findIndex((e) => e.id === id);
+    if (idx === -1) return;
+    this._draftElements.splice(idx, 1);
+    this._selectElement(null);
     this._renderCanvas();
     this._renderOverlay();
   }
@@ -463,7 +896,7 @@ export class LayoutEditor {
 
       const label = document.createElement("div");
       label.className = "layout-el-label";
-      label.textContent = el.type === "dayCard" ? DAY_LABELS_SHORT[el.id] || el.id : el.type === "header" ? "Header" : "Logo";
+      label.textContent = elementLabel(el);
       div.appendChild(label);
 
       Object.keys(CORNER_SIGNS).forEach((corner) => {
@@ -509,12 +942,28 @@ export class LayoutEditor {
     }
     this.propEmpty.style.display = "none";
     this.propFields.style.display = "";
-    this.propTitle.textContent = el.type === "dayCard" ? el.id : el.type === "header" ? "Header" : "Logo";
+    this.propTitle.textContent = el.type === "dayCard" ? el.id : elementLabel(el);
+
+    const isDayCard = el.type === "dayCard";
+    const isHeader = el.type === "header";
+    const isText = el.type === "text";
+    const isShape = el.type === "shape";
+    const isImage = el.type === "image";
+    const isFreeform = FREEFORM_ELEMENT_TYPES.includes(el.type);
+
     // Corner shape / accent color are meaningless on the logo (always
-    // circular, no accent-colored parts); the stripe only exists on cards.
-    this.cornerWrap.style.display = el.type === "logo" ? "none" : "";
-    this.accentWrap.style.display = el.type === "logo" ? "none" : "";
-    this.stripeWrap.style.display = el.type === "dayCard" ? "" : "none";
+    // circular, no accent-colored parts) and on text/image; the stripe
+    // only exists on cards; shape honors corner shape only for rects.
+    this.cornerWrap.style.display = isDayCard || isHeader || (isShape && el.shapeKind === "rect") ? "" : "none";
+    this.accentWrap.style.display = isDayCard || isHeader ? "" : "none";
+    this.stripeWrap.style.display = isDayCard ? "" : "none";
+    this.cardStyleWrap.style.display = isDayCard ? "" : "none";
+    this.fontWrap.style.display = isDayCard || isHeader || isText ? "" : "none";
+    this.textFieldsWrap.style.display = isText ? "" : "none";
+    this.shapeFieldsWrap.style.display = isShape ? "" : "none";
+    this.imageFieldsWrap.style.display = isImage ? "" : "none";
+    this.deleteWrap.style.display = isFreeform ? "" : "none";
+
     this._syncPropertyPanelValues(el);
   }
 
@@ -532,6 +981,28 @@ export class LayoutEditor {
       this.accentColorInput.value = el.accentColor || baseStyle?.colors?.accent || "#7b5fd9";
     }
     if (active !== this.inputOpacity) this.inputOpacity.value = String(Math.round((el.opacity ?? 1) * 100));
+
+    if (active !== this.cardStyleSelect) this.cardStyleSelect.value = el.cardStyle || "";
+    if (active !== this.animSelect) this.animSelect.value = el.animStyle || "";
+    if (active !== this.animIntensitySelect) this.animIntensitySelect.value = el.animIntensity || "med";
+
+    this.fontFilenameEl.textContent = el.fontFamily ? `Custom font: ${el.fontFamily}` : "Using the template's font";
+    this._refreshFontLibrarySelect();
+
+    if (active !== this.textArea) this.textArea.value = el.text || "";
+    if (active !== this.textAlignSelect) this.textAlignSelect.value = el.align || "center";
+    if (active !== this.textColorInput) {
+      const baseStyle = this.getBaseStyle ? this.getBaseStyle() : null;
+      this.textColorInput.value = el.color || baseStyle?.colors?.textPrimary || "#FFFFFF";
+    }
+    if (active !== this.textSizeInput) this.textSizeInput.value = ((el.fontSize || 0.03) * 100).toFixed(1);
+
+    if (active !== this.shapeKindSelect) this.shapeKindSelect.value = el.shapeKind || "rect";
+    if (active !== this.shapeFillInput) this.shapeFillInput.value = el.fillColor || "#7B5FD9";
+    if (active !== this.shapeStrokeInput) this.shapeStrokeInput.value = el.strokeColor || "#FFFFFF";
+    if (active !== this.shapeStrokeWidthInput) this.shapeStrokeWidthInput.value = String(el.strokeWidth || 0);
+
+    this.imageFilenameEl.textContent = el.imagePath ? el.imagePath.split(/[\\/]/).pop() : "No image chosen";
   }
 
   _startMove(e, el) {
@@ -696,6 +1167,7 @@ export class LayoutEditor {
     this.overlayEl.classList.add("open");
     this._renderCanvas();
     this._renderOverlay();
+    this._startAnimTicker();
   }
 
   openStandalone(onClose) {
@@ -705,8 +1177,30 @@ export class LayoutEditor {
   close() {
     this.overlayEl.classList.remove("open");
     this._onApply = null; // draft is discarded; the live style was never touched
+    this._stopAnimTicker();
     const onClose = this._onClose;
     this._onClose = null;
     if (onClose) onClose();
+  }
+
+  // renderStreamplan always gets t=null from _renderCanvas (a plain,
+  // non-GIF-export render) — animation phase only advances via
+  // resolvePhase's wall-clock fallback, which requires something to
+  // actually keep calling _renderCanvas() while idle. Without this ticker,
+  // per-element animStyle would never be visible while editing (only in an
+  // exported GIF, which drives its own t timeline). Mirrors
+  // previewCanvas.js's _startStickerTicker, scoped to this editor's own
+  // lifecycle (started on open(), stopped on close()) instead of the app's.
+  _startAnimTicker() {
+    this._stopAnimTicker();
+    this._animTickHandle = setInterval(() => {
+      const animated = this._draftElements.some((el) => el.animStyle && el.animStyle !== "none");
+      if (animated) this._renderCanvas();
+    }, ANIM_TICK_MS);
+  }
+
+  _stopAnimTicker() {
+    if (this._animTickHandle) clearInterval(this._animTickHandle);
+    this._animTickHandle = null;
   }
 }

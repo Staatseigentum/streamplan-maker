@@ -28,7 +28,10 @@ export class PreviewCanvas {
     this._stickerTickHandle = setInterval(() => {
       const hasGifSticker = (this.style?.customImages || []).some((img) => isGifPath(img.path));
       const hasAnimatedBg = this.style?.backgroundAnim && this.style.backgroundAnim !== "none";
-      if (hasGifSticker || hasAnimatedBg) this._renderNow();
+      const hasAnimatedElements = (this.style?.customLayout?.elements || []).some(
+        (el) => el.animStyle && el.animStyle !== "none"
+      );
+      if (hasGifSticker || hasAnimatedBg || hasAnimatedElements) this._renderNow();
     }, 1000 / this._fps);
   }
 
