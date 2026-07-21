@@ -56,7 +56,8 @@
     "publish": {
       "provider": "github",
       "owner": "Staatseigentum",
-      "repo": "streamplan-maker"
+      "repo": "streamplan-maker",
+      "releaseType": "release"
     }
   }
 }
