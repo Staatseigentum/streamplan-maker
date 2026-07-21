@@ -1,4 +1,5 @@
 import { sanitizeCustomLayout } from "./customLayout.js";
+import { BACKGROUND_ANIM_VALUES } from "../rendering/animatedBackgrounds.js";
 
 export const COLOR_KEYS = [
   "background",
@@ -20,6 +21,10 @@ export const LAYOUT_VARIANTS = [
   "splitColumns",
   "radialClock",
   "ticketStrip",
+  "cascadeFlow",
+  "orbitRing",
+  "novaRadiate",
+  "meteorRow",
 ];
 export const BACKGROUND_MODES = ["solid", "gradient", "image"];
 export const CORNER_STYLES = ["sharp", "rounded"];
@@ -51,6 +56,7 @@ export function createStyleConfig({
   customImages = [],
   customLayout = null,
   layoutLocked = false,
+  backgroundAnim = "none",
   backgroundImageOffsetX = 0.5,
   backgroundImageOffsetY = 0.5,
   backgroundImageScale = 1,
@@ -73,6 +79,7 @@ export function createStyleConfig({
     customImages: customImages.map((img) => ({ ...img })),
     customLayout: customLayout ? { elements: customLayout.elements.map((el) => ({ ...el })) } : null,
     layoutLocked,
+    backgroundAnim: BACKGROUND_ANIM_VALUES.includes(backgroundAnim) ? backgroundAnim : "none",
     // Pan (0-1 fraction of the source image, like sticker x/y) + zoom (>=1,
     // on top of the automatic cover-fit scale) for the background image and
     // logo crops — see rendering/layout.js's drawImageCoverAdjustable.
@@ -112,6 +119,7 @@ export function styleToDict(style) {
     })),
     custom_layout: style.customLayout ? { elements: style.customLayout.elements.map((el) => ({ ...el })) } : null,
     layout_locked: !!style.layoutLocked,
+    background_anim: style.backgroundAnim || "none",
     background_image_offset_x: style.backgroundImageOffsetX,
     background_image_offset_y: style.backgroundImageOffsetY,
     background_image_scale: style.backgroundImageScale,
@@ -142,6 +150,7 @@ export function styleFromDict(data) {
     customImages: data.custom_images || [],
     customLayout: data.custom_layout ? { elements: sanitizeCustomLayout(data.custom_layout.elements) } : null,
     layoutLocked: !!data.layout_locked,
+    backgroundAnim: data.background_anim || "none",
     backgroundImageOffsetX: clampFraction(data.background_image_offset_x, 0, 1, 0.5),
     backgroundImageOffsetY: clampFraction(data.background_image_offset_y, 0, 1, 0.5),
     backgroundImageScale: clampFraction(data.background_image_scale, 1, 4, 1),

@@ -7,7 +7,7 @@ import * as layout from "./layout.js";
 import { hexToRgba, roundedRectPath, drawImageCover, drawCircularImage } from "./layout.js";
 import { fontString } from "./fonts.js";
 import { getImage } from "./assetImages.js";
-import { applyGlow } from "./effects.js";
+import { drawAnimatedBackground } from "./animatedBackgrounds.js";
 import { isGifPath, getGifStickerFrame } from "./gifSticker.js";
 import { elementRectPx, elementCenterPx } from "../models/customLayout.js";
 
@@ -210,9 +210,8 @@ function drawDayCard(ctx, entry, rect, style, highlightRects, stripe = true, rot
 // fixed drawHeader()+VARIANT_DRAWERS[] path used by the 8 built-in variants.
 // Reuses the same drawDayCard() every built-in variant uses, wrapped in the
 // same save/translate/rotate/restore pattern already established by
-// drawTicketStripVariant (above) and effects.js's glow sweep, so a rotated
-// card renders identically to how it would if drawDayCard itself supported
-// rotation natively.
+// drawTicketStripVariant (above), so a rotated card renders identically to
+// how it would if drawDayCard itself supported rotation natively.
 
 function drawHeaderElement(ctx, rect, profile, style, highlightRects, rotationInfo) {
   const [x0, y0, x1, y1] = rect;
@@ -771,6 +770,214 @@ function drawTicketStripVariant(ctx, activeDays, style, contentArea, highlightRe
   });
 }
 
+// -- New "cosmic" layout variants (paired with the animated-template batch
+// in animatedBackgrounds.js) ---------------------------------------------
+
+function drawCascadeFlowVariant(ctx, activeDays, style, contentArea, highlightRects) {
+  if (activeDays.length === 0) {
+    drawEmptyState(ctx, contentArea, style);
+    return;
+  }
+  const [x0, y0, x1, y1] = contentArea;
+  const count = activeDays.length;
+  const gap = 20;
+  const rowH = Math.max((y1 - y0 - gap * (count - 1)) / count, 64);
+  const maxIndent = (x1 - x0) * 0.22;
+
+  activeDays.forEach((entry, i) => {
+    const frac = count > 1 ? i / (count - 1) : 0;
+    const indent = maxIndent * frac;
+    const rowY0 = y0 + i * (rowH + gap);
+    const rect = [x0 + indent, rowY0, x1, rowY0 + rowH];
+    drawDayCard(ctx, entry, rect, style, highlightRects);
+  });
+}
+
+function drawOrbitRingVariant(ctx, activeDays, style, contentArea, highlightRects) {
+  if (activeDays.length === 0) {
+    drawEmptyState(ctx, contentArea, style);
+    return;
+  }
+  const [x0, y0, x1, y1] = contentArea;
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2 - 10;
+  const radius = Math.min(x1 - x0, y1 - y0) / 2 - 70;
+  const startAngle = -Math.PI * 0.82;
+  const endAngle = Math.PI * 0.32;
+  const count = activeDays.length;
+  const accent = style.colors.accent || "#FFFFFF";
+  const accent2 = style.colors.accentSecondary || "#FFFFFF";
+  const textPrimary = style.colors.textPrimary || "#FFFFFF";
+  const textSecondary = style.colors.textSecondary || "#AAAAAA";
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, startAngle, endAngle);
+  ctx.strokeStyle = hexToRgba(accent2, 0.35);
+  ctx.lineWidth = 3;
+  ctx.setLineDash([2, 14]);
+  ctx.stroke();
+  ctx.restore();
+
+  const nodeR = 40;
+  activeDays.forEach((entry, i) => {
+    const frac = count > 1 ? i / (count - 1) : 0.5;
+    const angle = startAngle + (endAngle - startAngle) * frac;
+    const nx = cx + Math.cos(angle) * radius;
+    const ny = cy + Math.sin(angle) * radius;
+
+    ctx.beginPath();
+    ctx.arc(nx, ny, nodeR, 0, Math.PI * 2);
+    ctx.fillStyle = hexToRgba(accent, 0.92);
+    ctx.fill();
+    ctx.strokeStyle = hexToRgba(accent2, 0.6);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = fontString(style.fontHeading, 22 * style.headingScale, "bold");
+    ctx.fillStyle = "#0A0A0F";
+    ctx.fillText(DAY_LABELS_SHORT[entry.day] || entry.day.slice(0, 3).toUpperCase(), nx, ny);
+
+    let ty = ny + nodeR + 30;
+    ctx.font = fontString(style.fontBody, 24 * style.bodyScale, "bold");
+    ctx.fillStyle = textPrimary;
+    ctx.fillText(entry.startTime, nx, ty);
+
+    const end = endDisplay(entry);
+    if (end) {
+      ty += 26;
+      ctx.font = fontString(style.fontBody, 16 * style.bodyScale);
+      ctx.fillStyle = textSecondary;
+      ctx.fillText(truncateText(ctx, end, 170), nx, ty);
+    }
+
+    if (entry.label) {
+      const noteFontSize = 15 * style.bodyScale;
+      const lines = wrapText(ctx, entry.label, 170, 2);
+      ctx.font = fontString(style.fontBody, noteFontSize);
+      ctx.fillStyle = textSecondary;
+      lines.forEach((line) => {
+        ty += noteFontSize * 1.2;
+        ctx.fillText(line, nx, ty);
+      });
+    }
+
+    highlightRects.push([nx - nodeR, ny - nodeR, nx + nodeR, ny + nodeR]);
+  });
+}
+
+function drawNovaRadiateVariant(ctx, activeDays, style, contentArea, highlightRects) {
+  if (activeDays.length === 0) {
+    drawEmptyState(ctx, contentArea, style);
+    return;
+  }
+  const [x0, y0, x1, y1] = contentArea;
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  const maxRadius = Math.min(x1 - x0, y1 - y0) / 2 - 90;
+  const count = activeDays.length;
+  const accent = style.colors.accent || "#FFFFFF";
+  const accent2 = style.colors.accentSecondary || "#FFFFFF";
+  const textPrimary = style.colors.textPrimary || "#FFFFFF";
+  const textSecondary = style.colors.textSecondary || "#AAAAAA";
+
+  ctx.save();
+  const rayCount = 16;
+  ctx.strokeStyle = hexToRgba(accent2, 0.12);
+  ctx.lineWidth = 2;
+  for (let i = 0; i < rayCount; i++) {
+    const a = (i / rayCount) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(a) * maxRadius * 1.05, cy + Math.sin(a) * maxRadius * 1.05);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  ctx.beginPath();
+  ctx.arc(cx, cy, 54, 0, Math.PI * 2);
+  ctx.fillStyle = hexToRgba(accent, 0.95);
+  ctx.fill();
+
+  const nodeR = 38;
+  activeDays.forEach((entry, i) => {
+    const angle = (i / count) * Math.PI * 2 - Math.PI / 2;
+    const radius = maxRadius * (i % 2 === 0 ? 1 : 0.62);
+    const nx = cx + Math.cos(angle) * radius;
+    const ny = cy + Math.sin(angle) * radius;
+
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.lineTo(nx, ny);
+    ctx.strokeStyle = hexToRgba(accent2, 0.4);
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(nx, ny, nodeR, 0, Math.PI * 2);
+    ctx.fillStyle = hexToRgba(accent2, 0.92);
+    ctx.fill();
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = fontString(style.fontHeading, 20 * style.headingScale, "bold");
+    ctx.fillStyle = "#0A0A0F";
+    ctx.fillText(DAY_LABELS_SHORT[entry.day] || entry.day.slice(0, 3).toUpperCase(), nx, ny);
+
+    let ty = ny + nodeR + 28;
+    ctx.font = fontString(style.fontBody, 22 * style.bodyScale, "bold");
+    ctx.fillStyle = textPrimary;
+    ctx.fillText(entry.startTime, nx, ty);
+
+    const end = endDisplay(entry);
+    if (end) {
+      ty += 24;
+      ctx.font = fontString(style.fontBody, 15 * style.bodyScale);
+      ctx.fillStyle = textSecondary;
+      ctx.fillText(truncateText(ctx, end, 150), nx, ty);
+    }
+
+    highlightRects.push([nx - nodeR, ny - nodeR, nx + nodeR, ny + nodeR]);
+  });
+}
+
+function drawMeteorRowVariant(ctx, activeDays, style, contentArea, highlightRects) {
+  if (activeDays.length === 0) {
+    drawEmptyState(ctx, contentArea, style);
+    return;
+  }
+  const [x0, y0, x1, y1] = contentArea;
+  const count = activeDays.length;
+  const gap = 20;
+  const rowH = Math.max((y1 - y0 - gap * (count - 1)) / count, 66);
+  const accent = style.colors.accent || "#FFFFFF";
+
+  activeDays.forEach((entry, i) => {
+    const rowY0 = y0 + i * (rowH + gap);
+    const rowY1 = rowY0 + rowH;
+    const rect = [x0, rowY0, x1, rowY1];
+    const midY = (rowY0 + rowY1) / 2;
+
+    ctx.save();
+    const tailLen = 130;
+    const grad = ctx.createLinearGradient(x0, midY, x0 - tailLen, midY - tailLen * 0.4);
+    grad.addColorStop(0, hexToRgba(accent, 0.55));
+    grad.addColorStop(1, hexToRgba(accent, 0));
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 10;
+    ctx.lineCap = "round";
+    ctx.beginPath();
+    ctx.moveTo(x0, midY);
+    ctx.lineTo(x0 - tailLen, midY - tailLen * 0.4);
+    ctx.stroke();
+    ctx.restore();
+
+    drawDayCard(ctx, entry, rect, style, highlightRects);
+  });
+}
+
 const VARIANT_DRAWERS = {
   grid7: drawGridVariant,
   verticalTimeline: drawTimelineVariant,
@@ -779,6 +986,10 @@ const VARIANT_DRAWERS = {
   splitColumns: drawSplitColumnsVariant,
   radialClock: drawRadialClockVariant,
   ticketStrip: drawTicketStripVariant,
+  cascadeFlow: drawCascadeFlowVariant,
+  orbitRing: drawOrbitRingVariant,
+  novaRadiate: drawNovaRadiateVariant,
+  meteorRow: drawMeteorRowVariant,
 };
 
 // `outputSize` is the actual pixel size of the exported/rendered canvas —
@@ -807,6 +1018,9 @@ export function renderStreamplan(canvas, profile, style, t = null, outputSize = 
       style.backgroundMode === "image" && style.backgroundImagePath ? getImage(style.backgroundImagePath) : null,
   };
   layout.buildBackground(ctx, size, style, images);
+  if (style.backgroundAnim && style.backgroundAnim !== "none") {
+    drawAnimatedBackground(ctx, size, style, t);
+  }
 
   const highlightRects = [];
   const activeDays = sortedDays(profile);
@@ -838,10 +1052,6 @@ export function renderStreamplan(canvas, profile, style, t = null, outputSize = 
       if (img) layout.drawStickerImage(ctx, img, img.width, img.height, sticker, size);
     }
   });
-
-  if (t !== null) {
-    applyGlow(ctx, size, style, highlightRects, t);
-  }
 
   ctx.restore();
   return canvas;

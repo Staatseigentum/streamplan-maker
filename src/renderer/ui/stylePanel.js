@@ -40,9 +40,21 @@ const LAYOUT_LABELS = {
   splitColumns: "Weekday / Weekend Split",
   radialClock: "Radial Clock",
   ticketStrip: "Ticket Stubs",
+  cascadeFlow: "Cascade Flow",
+  orbitRing: "Orbit Ring",
+  novaRadiate: "Nova Radiate",
+  meteorRow: "Meteor Row",
 };
 const CORNER_LABELS = { sharp: "Sharp Corners", rounded: "Rounded Corners" };
 const BG_MODE_LABELS = { solid: "Solid Color", gradient: "Gradient", image: "Custom Image" };
+const BACKGROUND_ANIM_LABELS = {
+  none: "None",
+  nebulaDrift: "Nebula Drift",
+  aurora: "Aurora",
+  starfield: "Starfield",
+  novaPulse: "Nova Pulse",
+  meteorShower: "Meteor Shower",
+};
 
 function buildSelectRow(labelText, options, getValue, setValue) {
   const wrap = document.createElement("div");
@@ -709,6 +721,25 @@ export class StylePanel {
     );
     panel.appendChild(bgModeRow.el);
     this._refreshers.push(bgModeRow.refresh);
+
+    const bgAnimRow = buildSelectRow(
+      "Background Motion",
+      BACKGROUND_ANIM_LABELS,
+      () => this.getStyle().backgroundAnim || "none",
+      (value) => {
+        const style = this.getStyle();
+        style.backgroundAnim = value;
+        this.onStyleChange(style);
+      }
+    );
+    panel.appendChild(bgAnimRow.el);
+    this._refreshers.push(bgAnimRow.refresh);
+
+    const bgAnimHint = document.createElement("div");
+    bgAnimHint.className = "field-hint";
+    bgAnimHint.textContent =
+      "Adds a subtle animated backdrop that shows in the live preview and every export, including the animated GIF.";
+    panel.appendChild(bgAnimHint);
 
     const imagesHeader = document.createElement("div");
     imagesHeader.className = "section-header";
