@@ -370,6 +370,7 @@ export class TemplateStudio {
     });
     this._lockableEls.push(this.loadLayoutSelect);
     libraryRow.appendChild(this.loadLayoutSelect);
+    this.libraryRowEl = libraryRow;
 
     // -- Body: canvas + sidebar -----------------------------------------
     const body = document.createElement("div");
@@ -616,6 +617,7 @@ export class TemplateStudio {
     );
     panel.appendChild(bgModeRow.el);
     this._styleRefreshers.push(bgModeRow.refresh);
+    this.bgModeRowEl = bgModeRow.el;
 
     this._buildGradientSection(panel);
 
@@ -1175,6 +1177,7 @@ export class TemplateStudio {
     header.className = "section-header";
     header.textContent = t("templateStudio.shadowHeader");
     this.propFields.appendChild(header);
+    this.shadowSectionHeader = header;
 
     const { input: colorInput } = this._appendColorRow(
       this.propFields,

@@ -261,6 +261,8 @@ function buildStickerCard(sticker, { getStyle, onStyleChange, refresh }) {
   return card;
 }
 
+// Returns { refresh, headerEl } — headerEl lets callers (the onboarding
+// tour) spotlight this section without needing its own DOM id.
 function buildCustomImagesSection(container, { getStyle, onStyleChange }) {
   const header = document.createElement("div");
   header.className = "section-header";
@@ -308,10 +310,10 @@ function buildCustomImagesSection(container, { getStyle, onStyleChange }) {
   });
 
   refresh();
-  return refresh;
+  return { refresh, headerEl: header };
 }
 
-export function buildAssetsTab(container, { getStyle, onStyleChange }) {
+export function buildAssetsTab(container, { getStyle, onStyleChange, refs = {} }) {
   const refreshers = [];
 
   const bgHeader = document.createElement("div");
@@ -361,6 +363,7 @@ export function buildAssetsTab(container, { getStyle, onStyleChange }) {
   });
   container.appendChild(bgCard.el);
   refreshers.push(bgCard.refresh);
+  refs.bgCard = bgCard.el;
 
   const logoCard = buildImageAssetCard({
     title: t("assets.logoTitle"),
@@ -407,11 +410,13 @@ export function buildAssetsTab(container, { getStyle, onStyleChange }) {
   });
   container.appendChild(logoCard.el);
   refreshers.push(logoCard.refresh);
+  refs.logoCard = logoCard.el;
 
   const fontHeader = document.createElement("div");
   fontHeader.className = "section-header";
   fontHeader.textContent = t("assets.customFontsHeader");
   container.appendChild(fontHeader);
+  refs.fontHeader = fontHeader;
 
   const headingCard = buildFontAssetCard({
     title: t("common.headingFont"),
@@ -449,8 +454,9 @@ export function buildAssetsTab(container, { getStyle, onStyleChange }) {
   container.appendChild(bodyCard.el);
   refreshers.push(bodyCard.refresh);
 
-  const stickerRefresh = buildCustomImagesSection(container, { getStyle, onStyleChange });
-  refreshers.push(stickerRefresh);
+  const stickerSection = buildCustomImagesSection(container, { getStyle, onStyleChange });
+  refreshers.push(stickerSection.refresh);
+  refs.stickersHeader = stickerSection.headerEl;
 
   return refreshers;
 }

@@ -257,6 +257,10 @@ const onboardingTour = new OnboardingTour(
       currentTutorialSeen = true;
       scheduleAutosave();
     },
+    stylePanel,
+    layoutEditor,
+    templateStudio,
+    softwareSettings,
   }
 );
 document.getElementById("helpTourBtn").addEventListener("click", () => onboardingTour.replay());

@@ -84,32 +84,29 @@ export class SoftwareSettings {
       ["updates", t("settings.tabUpdates")],
       ["community", t("settings.tabCommunity")],
     ];
-    const panelEls = {};
+    this.tabBtns = {};
+    this.panelEls = {};
     tabDefs.forEach(([id, label], i) => {
       const btn = document.createElement("button");
       btn.className = "tab-btn" + (i === 0 ? " active" : "");
       btn.textContent = label;
-      btn.addEventListener("click", () => {
-        tabs.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
-        btn.classList.add("active");
-        Object.values(panelEls).forEach((p) => p.classList.remove("active"));
-        panelEls[id].classList.add("active");
-      });
+      btn.addEventListener("click", () => this._activateTab(id));
       tabs.appendChild(btn);
+      this.tabBtns[id] = btn;
 
       const panel = document.createElement("div");
       panel.className = "tab-panel" + (i === 0 ? " active" : "");
-      panelEls[id] = panel;
+      this.panelEls[id] = panel;
       panelsWrap.appendChild(panel);
     });
 
     modal.append(tabs, panelsWrap);
-    this._buildThemesTab(panelEls.themes);
-    this._buildDisplayTab(panelEls.display);
-    this._buildLanguageTab(panelEls.language);
-    this._buildUpdatesTab(panelEls.updates);
-    this._buildCommunityTab(panelEls.community);
-    this.updatesTabBtn = tabs.querySelectorAll(".tab-btn")[3];
+    this._buildThemesTab(this.panelEls.themes);
+    this._buildDisplayTab(this.panelEls.display);
+    this._buildLanguageTab(this.panelEls.language);
+    this._buildUpdatesTab(this.panelEls.updates);
+    this._buildCommunityTab(this.panelEls.community);
+    this.updatesTabBtn = this.tabBtns.updates;
 
     this.overlayEl.appendChild(modal);
     this.overlayEl.addEventListener("click", (e) => {
@@ -119,6 +116,11 @@ export class SoftwareSettings {
       if (e.key === "Escape" && this.overlayEl.classList.contains("open")) this.close();
     };
     document.addEventListener("keydown", this._escHandler);
+  }
+
+  _activateTab(id) {
+    Object.entries(this.tabBtns).forEach(([tid, btn]) => btn.classList.toggle("active", tid === id));
+    Object.entries(this.panelEls).forEach(([tid, panel]) => panel.classList.toggle("active", tid === id));
   }
 
   _buildThemesTab(container) {
@@ -400,6 +402,7 @@ export class SoftwareSettings {
     openBtn.textContent = t("settings.communityOpenBtn");
     openBtn.addEventListener("click", () => window.streamplanAPI.openExternal(COMMUNITY_SITE_URL));
     container.appendChild(openBtn);
+    this.communityOpenBtn = openBtn;
   }
 
   _refreshSelection() {

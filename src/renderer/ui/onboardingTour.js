@@ -1,20 +1,13 @@
 // First-run "would you like a tour?" prompt (with a one-more-nudge skip
-// confirmation, since the app can be overwhelming at first) plus a 7-step
-// guided spotlight tour covering every major area of the UI. Whether the
-// tour has been seen/skipped is persisted by app.js via the same
-// autosave.json payload as language/theme/etc. (see project/autosave.js's
-// tutorialSeen field) — this module only owns the UI, not the persistence.
+// confirmation, since the app can be overwhelming at first) plus a guided
+// spotlight tour covering every major area of the UI — including, for the
+// Template Studio and Layout Editor, actually opening those full-screen
+// overlays and narrating their own key controls, not just pointing at the
+// button that opens them. Whether the tour has been seen/skipped is
+// persisted by app.js via the same autosave.json payload as
+// language/theme/etc. (see project/autosave.js's tutorialSeen field) — this
+// module only owns the UI, not the persistence.
 import { t } from "../i18n/index.js";
-
-const STEPS = [
-  { targetId: "projectBar", titleKey: "onboarding.step1Title", bodyKey: "onboarding.step1Body" },
-  { targetId: "sidePanel", titleKey: "onboarding.step2Title", bodyKey: "onboarding.step2Body" },
-  { targetId: "previewFrame", titleKey: "onboarding.step3Title", bodyKey: "onboarding.step3Body" },
-  { targetId: "stylePanel", titleKey: "onboarding.step4Title", bodyKey: "onboarding.step4Body" },
-  { targetId: "exportBar", titleKey: "onboarding.step5Title", bodyKey: "onboarding.step5Body" },
-  { targetId: "layoutEditorBtn", titleKey: "onboarding.step6Title", bodyKey: "onboarding.step6Body" },
-  { targetId: "settingsBtn", titleKey: "onboarding.step7Title", bodyKey: "onboarding.step7Body" },
-];
 
 const SPOTLIGHT_PAD = 10;
 const TOOLTIP_MARGIN = 18;
@@ -23,11 +16,18 @@ export class OnboardingTour {
   // onComplete is called exactly once per "session" of this flow — whether
   // the user finishes the whole tour, skips from the welcome prompt, or
   // skips mid-tour — so app.js can persist tutorialSeen in every case.
-  constructor(promptOverlayEl, tourOverlayEl, { onComplete }) {
+  // deps: { stylePanel, layoutEditor, templateStudio, softwareSettings } —
+  // the same instances app.js already builds, reused here so the tour opens
+  // Template Studio / the Layout Editor / Settings via the exact same code
+  // path a real click would, instead of duplicating that wiring.
+  constructor(promptOverlayEl, tourOverlayEl, { onComplete, stylePanel, layoutEditor, templateStudio, softwareSettings }) {
     this.promptOverlayEl = promptOverlayEl;
     this.tourOverlayEl = tourOverlayEl;
     this.onComplete = onComplete;
+    this._deps = { stylePanel, layoutEditor, templateStudio, softwareSettings };
+    this._steps = this._buildSteps();
     this._stepIndex = 0;
+    this._currentSection = "main";
     this._skipContext = null; // "welcome" | "tour" — which flow opened the skip-confirm nudge
     this._build();
 
@@ -38,6 +38,155 @@ export class OnboardingTour {
       else if (this.promptOverlayEl.classList.contains("open")) this._showSkipConfirm("welcome");
       else if (this.tourOverlayEl.classList.contains("open")) this._showSkipConfirm("tour");
     });
+  }
+
+  // Which overlay (if any) a given step's section needs open, and how to
+  // open/close it — reusing app.js's own openTemplateStudio/openStandalone/
+  // open wiring so this behaves identically to a real click, including the
+  // same onClose refresh-the-panel side effects.
+  _sectionHandlers() {
+    const { stylePanel, layoutEditor, templateStudio, softwareSettings } = this._deps;
+    return {
+      main: {},
+      layoutEditor: {
+        open: () => layoutEditor.openStandalone(() => stylePanel.refreshAll()),
+        close: () => layoutEditor.close(),
+        isOpen: () => layoutEditor.overlayEl.classList.contains("open"),
+      },
+      templateStudio: {
+        open: () => stylePanel.openTemplateStudio({ style: stylePanel.getStyle() }),
+        close: () => templateStudio.close(),
+        isOpen: () => templateStudio.overlayEl.classList.contains("open"),
+      },
+      settings: {
+        open: () => softwareSettings.open(),
+        close: () => softwareSettings.close(),
+        isOpen: () => softwareSettings.overlayEl.classList.contains("open"),
+      },
+    };
+  }
+
+  // Selects the first draft element if nothing is selected yet, purely so a
+  // Template Studio / Layout Editor "Element tab" step has something real to
+  // show in the property panel instead of the empty-selection hint.
+  _selectFirstElementIfNone(owner) {
+    if (!owner._selectedId && owner._draftElements.length) owner._selectElement(owner._draftElements[0].id);
+  }
+
+  _buildSteps() {
+    const { stylePanel, layoutEditor, templateStudio, softwareSettings } = this._deps;
+    return [
+      { targetId: "projectBar", titleKey: "onboarding.step1Title", bodyKey: "onboarding.step1Body" },
+      { targetId: "sidePanel", titleKey: "onboarding.step2Title", bodyKey: "onboarding.step2Body" },
+      { targetId: "previewFrame", titleKey: "onboarding.step3Title", bodyKey: "onboarding.step3Body" },
+      { targetId: "stylePanel", titleKey: "onboarding.step4Title", bodyKey: "onboarding.step4Body" },
+
+      // -- Customize tab, in more depth -------------------------------
+      {
+        titleKey: "onboarding.customizeColorsTitle",
+        bodyKey: "onboarding.customizeColorsBody",
+        activate: () => stylePanel._activateTab("customize"),
+        getTarget: () => stylePanel.customizeRefs?.colorsHeader,
+      },
+      {
+        titleKey: "onboarding.customizeBackgroundTitle",
+        bodyKey: "onboarding.customizeBackgroundBody",
+        getTarget: () => stylePanel.customizeRefs?.bgModeRowEl,
+      },
+      {
+        titleKey: "onboarding.customizeStickersTitle",
+        bodyKey: "onboarding.customizeStickersBody",
+        getTarget: () => stylePanel.customizeRefs?.imagesHeader,
+      },
+
+      // -- Assets tab, in more depth -----------------------------------
+      {
+        titleKey: "onboarding.assetsIntroTitle",
+        bodyKey: "onboarding.assetsIntroBody",
+        activate: () => stylePanel._activateTab("assets"),
+        getTarget: () => stylePanel.assetRefs?.bgCard,
+      },
+      {
+        titleKey: "onboarding.assetsFontsTitle",
+        bodyKey: "onboarding.assetsFontsBody",
+        getTarget: () => stylePanel.assetRefs?.fontHeader,
+      },
+      {
+        titleKey: "onboarding.assetsStickersTitle",
+        bodyKey: "onboarding.assetsStickersBody",
+        getTarget: () => stylePanel.assetRefs?.stickersHeader,
+      },
+
+      // -- Template Studio: actually opened, not just pointed at -------
+      {
+        section: "templateStudio",
+        titleKey: "onboarding.templateStudioIntroTitle",
+        bodyKey: "onboarding.templateStudioIntroBody",
+        activate: () => templateStudio._activateSidebarTab("style"),
+        getTarget: () => templateStudio.canvasWrap,
+      },
+      {
+        section: "templateStudio",
+        titleKey: "onboarding.templateStudioStyleTitle",
+        bodyKey: "onboarding.templateStudioStyleBody",
+        getTarget: () => templateStudio.bgModeRowEl,
+      },
+      {
+        section: "templateStudio",
+        titleKey: "onboarding.templateStudioElementTitle",
+        bodyKey: "onboarding.templateStudioElementBody",
+        activate: () => {
+          templateStudio._activateSidebarTab("element");
+          this._selectFirstElementIfNone(templateStudio);
+        },
+        getTarget: () => templateStudio.shadowSectionHeader,
+      },
+      {
+        section: "templateStudio",
+        titleKey: "onboarding.templateStudioSaveTitle",
+        bodyKey: "onboarding.templateStudioSaveBody",
+        getTarget: () => templateStudio.libraryRowEl,
+      },
+
+      { targetId: "exportBar", titleKey: "onboarding.step5Title", bodyKey: "onboarding.step5Body" },
+      { targetId: "layoutEditorBtn", titleKey: "onboarding.step6Title", bodyKey: "onboarding.step6Body" },
+
+      // -- Layout Editor: actually opened, not just pointed at ---------
+      {
+        section: "layoutEditor",
+        titleKey: "onboarding.layoutEditorCanvasTitle",
+        bodyKey: "onboarding.layoutEditorCanvasBody",
+        getTarget: () => layoutEditor.canvasWrap,
+      },
+      {
+        section: "layoutEditor",
+        titleKey: "onboarding.layoutEditorAddTitle",
+        bodyKey: "onboarding.layoutEditorAddBody",
+        getTarget: () => layoutEditor.toolbarEl,
+      },
+      {
+        section: "layoutEditor",
+        titleKey: "onboarding.layoutEditorPropertiesTitle",
+        bodyKey: "onboarding.layoutEditorPropertiesBody",
+        activate: () => this._selectFirstElementIfNone(layoutEditor),
+        getTarget: () => layoutEditor.sidebarEl,
+      },
+      {
+        section: "layoutEditor",
+        titleKey: "onboarding.layoutEditorSaveTitle",
+        bodyKey: "onboarding.layoutEditorSaveBody",
+        getTarget: () => layoutEditor.libraryRowEl,
+      },
+
+      { targetId: "settingsBtn", titleKey: "onboarding.step7Title", bodyKey: "onboarding.step7Body" },
+      {
+        section: "settings",
+        titleKey: "onboarding.settingsCommunityTitle",
+        bodyKey: "onboarding.settingsCommunityBody",
+        activate: () => softwareSettings._activateTab("community"),
+        getTarget: () => softwareSettings.communityOpenBtn,
+      },
+    ];
   }
 
   _build() {
@@ -190,17 +339,21 @@ export class OnboardingTour {
     this.promptOverlayEl.classList.remove("open");
     this._welcomeModal.classList.remove("visible");
     this._stepIndex = 0;
+    this._currentSection = "main";
     this._renderStep(); // position everything correctly before the pop-in plays
     this.tourOverlayEl.classList.add("open");
   }
 
   _endTour() {
+    // Whatever overlay the tour opened along the way (Template Studio, the
+    // Layout Editor, Settings) shouldn't linger behind the closed tour.
+    this._ensureSection("main");
     this.tourOverlayEl.classList.remove("open");
     this.onComplete?.();
   }
 
   _nextStep() {
-    if (this._stepIndex >= STEPS.length - 1) {
+    if (this._stepIndex >= this._steps.length - 1) {
       this._endTour();
       return;
     }
@@ -214,9 +367,34 @@ export class OnboardingTour {
     this._renderStep();
   }
 
+  // Opens/closes the overlay (if any) a section needs, only on an actual
+  // section change — and defensively re-opens it if the user somehow closed
+  // it out from under an in-progress step (e.g. via Escape, which both this
+  // module and the overlay's own handler independently react to).
+  _ensureSection(section) {
+    const handlers = this._sectionHandlers();
+    if (section !== this._currentSection) {
+      handlers[this._currentSection]?.close?.();
+      this._currentSection = section;
+    }
+    const handler = handlers[section];
+    if (handler?.open && !handler.isOpen()) handler.open();
+  }
+
+  _resolveTarget(step) {
+    try {
+      return step.getTarget ? step.getTarget() : document.getElementById(step.targetId);
+    } catch {
+      return null;
+    }
+  }
+
   _renderStep() {
-    const step = STEPS[this._stepIndex];
-    const target = document.getElementById(step.targetId);
+    const step = this._steps[this._stepIndex];
+    this._ensureSection(step.section || "main");
+    step.activate?.();
+
+    const target = this._resolveTarget(step);
     if (!target) {
       // Defensive: never get the tour stuck on a step whose target vanished.
       this._nextStep();
@@ -225,11 +403,11 @@ export class OnboardingTour {
 
     const alreadyOpen = this.tourOverlayEl.classList.contains("open");
     const applyText = () => {
-      this._progressEl.textContent = t("onboarding.stepOf", { current: this._stepIndex + 1, total: STEPS.length });
+      this._progressEl.textContent = t("onboarding.stepOf", { current: this._stepIndex + 1, total: this._steps.length });
       this._titleEl.textContent = t(step.titleKey);
       this._bodyEl.textContent = t(step.bodyKey);
       this._backBtn.disabled = this._stepIndex === 0;
-      this._nextBtn.textContent = this._stepIndex === STEPS.length - 1 ? t("common.finish") : t("common.next");
+      this._nextBtn.textContent = this._stepIndex === this._steps.length - 1 ? t("common.finish") : t("common.next");
     };
 
     if (alreadyOpen) {
@@ -242,11 +420,18 @@ export class OnboardingTour {
       applyText();
     }
 
+    // Many new targets live inside scrollable side panels (the Customize/
+    // Assets tabs, Template Studio's and the Layout Editor's sidebars) —
+    // without this they can be positioned correctly but scrolled out of
+    // view. Both html/body and every .side-scroll container have no
+    // scroll-behavior:smooth set, so this jumps instantly, in sync with the
+    // spotlight's own positioning right after.
+    target.scrollIntoView({ block: "center", inline: "nearest" });
     this._positionOnTarget(target);
   }
 
   _positionOnTarget(target) {
-    this._activeTargetId = target.id;
+    this._activeTarget = target;
     const rect = target.getBoundingClientRect();
     this._spotlightEl.style.left = `${rect.left - SPOTLIGHT_PAD}px`;
     this._spotlightEl.style.top = `${rect.top - SPOTLIGHT_PAD}px`;
@@ -298,8 +483,7 @@ export class OnboardingTour {
   }
 
   _reposition() {
-    if (!this.tourOverlayEl.classList.contains("open") || !this._activeTargetId) return;
-    const target = document.getElementById(this._activeTargetId);
-    if (target) this._positionOnTarget(target);
+    if (!this.tourOverlayEl.classList.contains("open") || !this._activeTarget) return;
+    if (document.contains(this._activeTarget)) this._positionOnTarget(this._activeTarget);
   }
 }

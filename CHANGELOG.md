@@ -2,6 +2,12 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.12] - 2026-07-23
+
+### Added
+- The guided tour now goes into real depth on the Customize and Assets tabs (colors, fonts, background & motion, custom image stickers, custom fonts) instead of one generic step, and it actually opens the Template Studio and the Layout Editor to walk through their own key tools — canvas, adding your own elements, the property panel, gradients & textures, drop shadows, and save/export — rather than just pointing at the buttons that open them.
+- The tour's Settings step now also points out the Community tab's link to Streamplan Hub.
+
 ## [1.0.11] - 2026-07-22
 
 ### Added

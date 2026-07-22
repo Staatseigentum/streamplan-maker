@@ -258,12 +258,14 @@ export class StylePanel {
     this._buildTemplatesTab(this.panelEls.templates);
     this._buildCustomizeTab(this.panelEls.customize);
     this._buildTemplateCustomizeTab(this.panelEls.templateCustomize);
+    this.assetRefs = {};
     const assetRefreshers = buildAssetsTab(this.panelEls.assets, {
       getStyle: this.getStyle,
       onStyleChange: (style) => {
         this.onStyleChange(style);
         this._refreshAll();
       },
+      refs: this.assetRefs,
     });
     this._refreshers.push(...assetRefreshers);
 
@@ -586,6 +588,10 @@ export class StylePanel {
     };
     refreshImagesSection();
     this._refreshers.push(refreshImagesSection);
+
+    // Landmarks the onboarding tour spotlights when walking through this
+    // tab in more depth than the single generic "Style & Design" step.
+    this.customizeRefs = { colorsHeader, fontsHeader, bgModeRowEl: bgModeRow.el, imagesHeader };
   }
 
   _refreshAll() {

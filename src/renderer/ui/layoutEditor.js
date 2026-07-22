@@ -229,6 +229,7 @@ export class LayoutEditor {
     closeBtn.textContent = t("layoutEditor.closeBtn");
     closeBtn.addEventListener("click", () => this.close());
     toolbar.appendChild(closeBtn);
+    this.toolbarEl = toolbar;
 
     // -- Library row (save/export/import a reusable layout) -----------
     const libraryRow = document.createElement("div");
@@ -319,6 +320,7 @@ export class LayoutEditor {
       this._refreshLoadSelect();
     });
     libraryRow.appendChild(this.deleteLibraryBtn);
+    this.libraryRowEl = libraryRow;
 
     // -- Body: canvas + sidebar -----------------------------------------
     const body = document.createElement("div");
