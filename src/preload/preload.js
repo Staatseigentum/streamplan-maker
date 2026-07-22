@@ -39,4 +39,11 @@ contextBridge.exposeInMainWorld("streamplanAPI", {
     ipcRenderer.on("updater:status", listener);
     return () => ipcRenderer.removeListener("updater:status", listener);
   },
+
+  openExternal: (url) => ipcRenderer.invoke("app:open-external", url),
+  onImportRequest: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on("protocol:import-request", listener);
+    return () => ipcRenderer.removeListener("protocol:import-request", listener);
+  },
 });

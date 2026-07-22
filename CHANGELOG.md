@@ -2,6 +2,12 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.11] - 2026-07-22
+
+### Added
+- Streamplan Maker is now the companion app for [Streamplan Hub](https://streamplan-maker.online/), the new community site for publishing and downloading Templates & Custom Layouts. Clicking a download button there now opens Streamplan Maker directly and drops the Template or Layout straight into the Template Studio / Layout Editor library, ready to pick — no manual file download needed.
+- A new "Community" tab in Settings links straight to Streamplan Hub.
+
 ## [1.0.10] - 2026-07-22
 
 ### Fixed

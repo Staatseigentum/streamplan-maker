@@ -1237,6 +1237,14 @@ export class LayoutEditor {
   async importAndOpen(onClose) {
     const entry = await this._importLayoutFromDialog();
     if (!entry) return;
+    this.openLibraryEntry(entry, onClose);
+  }
+
+  // Shared tail of importAndOpen(): opens the editor pre-loaded and selected
+  // on a library entry that already exists (already added via addCustomLayout
+  // elsewhere — e.g. app.js's streamplan-maker:// deep-link handler, which
+  // fetches+adds the entry itself before calling this).
+  openLibraryEntry(entry, onClose) {
     this.open({ elements: entry.elements, onClose });
     this._loadedLibraryId = entry.id;
     this.nameInput.value = entry.name;

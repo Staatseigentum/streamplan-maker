@@ -2,6 +2,8 @@ import { APP_THEMES, applyAppTheme } from "./appThemes.js";
 import { PREVIEW_FPS_OPTIONS } from "../../shared/constants.js";
 import { SUPPORTED_LANGUAGES, t } from "../i18n/index.js";
 
+const COMMUNITY_SITE_URL = "https://streamplan-maker.online/";
+
 function buildSelectRow(labelText, options, getValue, setValue) {
   const wrap = document.createElement("div");
   wrap.style.marginBottom = "14px";
@@ -80,6 +82,7 @@ export class SoftwareSettings {
       ["display", t("settings.tabDisplay")],
       ["language", t("settings.tabLanguage")],
       ["updates", t("settings.tabUpdates")],
+      ["community", t("settings.tabCommunity")],
     ];
     const panelEls = {};
     tabDefs.forEach(([id, label], i) => {
@@ -105,6 +108,7 @@ export class SoftwareSettings {
     this._buildDisplayTab(panelEls.display);
     this._buildLanguageTab(panelEls.language);
     this._buildUpdatesTab(panelEls.updates);
+    this._buildCommunityTab(panelEls.community);
     this.updatesTabBtn = tabs.querySelectorAll(".tab-btn")[3];
 
     this.overlayEl.appendChild(modal);
@@ -372,6 +376,30 @@ export class SoftwareSettings {
           break;
       }
     });
+  }
+
+  _buildCommunityTab(container) {
+    const hint = document.createElement("div");
+    hint.className = "field-hint";
+    hint.textContent = t("settings.communityHint");
+    container.appendChild(hint);
+
+    const header = document.createElement("div");
+    header.className = "section-header";
+    header.textContent = t("settings.communityHeader");
+    container.appendChild(header);
+
+    const description = document.createElement("div");
+    description.className = "field-label";
+    description.style.marginBottom = "14px";
+    description.textContent = t("settings.communityDescription");
+    container.appendChild(description);
+
+    const openBtn = document.createElement("button");
+    openBtn.className = "primary";
+    openBtn.textContent = t("settings.communityOpenBtn");
+    openBtn.addEventListener("click", () => window.streamplanAPI.openExternal(COMMUNITY_SITE_URL));
+    container.appendChild(openBtn);
   }
 
   _refreshSelection() {

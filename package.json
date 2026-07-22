@@ -1,6 +1,6 @@
 {
   "name": "streamplan-maker",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "description": "Design and export a personalized weekly stream schedule graphic.",
   "main": "src/main/main.js",
   "author": "",
@@ -43,6 +43,14 @@
       ],
       "icon": "build/icon.ico"
     },
+    "protocols": [
+      {
+        "name": "Streamplan Maker Import",
+        "schemes": [
+          "streamplan-maker"
+        ]
+      }
+    ],
     "nsis": {
       "oneClick": false,
       "perMachine": false,

@@ -1,7 +1,7 @@
 const fs = require("fs/promises");
 const os = require("os");
 const path = require("path");
-const { app, dialog, ipcMain, BrowserWindow } = require("electron");
+const { app, dialog, ipcMain, BrowserWindow, shell } = require("electron");
 const { applyDisplayMode } = require("./displayMode");
 const { checkForUpdates, quitAndInstall } = require("./updater");
 
@@ -146,6 +146,11 @@ function registerIpcHandlers() {
   ipcMain.handle("app:is-packaged", () => app.isPackaged);
   ipcMain.handle("updater:check", () => checkForUpdates());
   ipcMain.handle("updater:quit-and-install", () => quitAndInstall());
+
+  ipcMain.handle("app:open-external", (_event, url) => {
+    if (typeof url !== "string" || !/^https:\/\//.test(url)) return;
+    return shell.openExternal(url);
+  });
 }
 
 module.exports = { registerIpcHandlers };

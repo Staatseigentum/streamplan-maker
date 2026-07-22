@@ -1,6 +1,9 @@
 import { createProjectDocument, touch } from "./models/project.js";
 import { createStreamerProfile } from "./models/schedule.js";
 import { defaultStyle } from "./models/templates.js";
+import { cloneStyle, styleFromDict } from "./models/style.js";
+import { addCustomTemplate } from "./models/customTemplateLibrary.js";
+import { addCustomLayout } from "./models/customLayoutLibrary.js";
 import { SchedulePanel } from "./ui/schedulePanel.js";
 import { StylePanel } from "./ui/stylePanel.js";
 import { PreviewCanvas } from "./ui/previewCanvas.js";
@@ -142,6 +145,59 @@ const stylePanel = new StylePanel(stylePanelEl, {
   },
   openTemplateStudio: (opts) => templateStudio.open({ ...opts, onClose: () => stylePanel.refreshAll() }),
 });
+
+// Handles the streamplan-maker://import?type=...&url=...&name=... link that
+// the companion website's download button opens: main.js has already parsed
+// and validated the URL (see main.js's parseImportPayload) before pushing
+// this event, so `type`/`url` are trustworthy here — but the fetched file
+// content itself still goes through the same validation as a normal local
+// file import, since it's untrusted network data either way.
+async function handleImportRequest({ type, url, name }) {
+  setStatus(t("status.importingFromWeb"));
+  let parsed;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    parsed = JSON.parse(await response.text());
+    if (type === "template") {
+      if (!parsed || !parsed.style) throw new Error(t("style.invalidTemplateFile"));
+    } else if (!parsed || !parsed.elements) {
+      throw new Error(t("layoutEditor.invalidLayoutFile"));
+    }
+  } catch (err) {
+    console.error(err);
+    const failMessage =
+      type === "layout"
+        ? t("layoutEditor.importLayoutFailed", { message: err.message })
+        : t("style.importTemplateFailed", { message: err.message });
+    await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), failMessage);
+    return;
+  }
+
+  // A deep-link can arrive while some other overlay is already open (e.g.
+  // Settings, or the other one of these two) — close both first so the
+  // target overlay doesn't end up stacked underneath/behind a stale one.
+  templateStudio.close();
+  layoutEditor.close();
+  softwareSettings.close();
+
+  const importedName = name || parsed.name || (type === "template" ? "Imported Template" : "Imported Layout");
+  if (type === "template") {
+    const importedStyle = styleFromDict(parsed.style);
+    importedStyle.layoutLocked = true;
+    const entry = addCustomTemplate({ name: importedName, style: importedStyle });
+    entry.style.templateId = entry.id;
+    templateStudio.open({ style: cloneStyle(entry.style), onClose: () => stylePanel.refreshAll() });
+  } else {
+    const entry = addCustomLayout({ name: importedName, elements: parsed.elements });
+    layoutEditor.openLibraryEntry(entry, () => stylePanel.refreshAll());
+  }
+
+  scheduleAutosave();
+  setStatus(t("status.importedFromWeb", { name: importedName }), "success");
+}
+
+window.streamplanAPI.onImportRequest(handleImportRequest);
 
 buildExportBar(document.getElementById("exportBar"), setStatus, {
   getProfile: () => document_.profile,
