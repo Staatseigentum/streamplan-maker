@@ -5,11 +5,6 @@ All notable changes to Streamplan Maker are documented here. Each entry becomes 
 ## [1.0.8] - 2026-07-22
 
 ### Added
-- A guided first-run tour: on first launch (or after updating from a version that predates it), the app asks whether you'd like a quick tour. It walks through the project bar, schedule, live preview, style panel, export, Layout Editor, and Settings with an on-screen spotlight. Skipping asks you to confirm first, since the app can be a lot to take in at once. Replay it anytime from the new "❔ Tour" button in the top bar.
-
-## [1.0.7] - 2026-07-22
-
-### Added
 - The exported plan graphic itself is now translated when the app is set to German — title, day labels ("MO"/"DI"/…), and "bis"/empty-state text — not just the app's own menus.
 - In Custom Layout mode (Layout Editor / Template Studio), every day's start time and duration are now their own independently drag/resize/rotate-able elements, instead of being fixed to their day card.
 - A "Logo Size" slider (Assets tab), separate from the existing crop/zoom control, for the 8 built-in layout variants' header logo.
@@ -17,6 +12,7 @@ All notable changes to Streamplan Maker are documented here. Each entry becomes 
 - Each day in the schedule can now have its own optional image (e.g. game cover art), shown inside that day's card on every layout and card skin.
 - The Schedule panel's day checkboxes (Monday, Tuesday, …) are now translated in German too, matching the rest of the app.
 - Switching language now shows a loading screen while the app reloads, and asks you to confirm first since it's a full app reload.
+- A guided first-run tour: on first launch (or after updating from a version that predates it), the app asks whether you'd like a quick tour. It walks through the project bar, schedule, live preview, style panel, export, Layout Editor, and Settings with an on-screen spotlight. Skipping asks you to confirm first, since the app can be a lot to take in at once. Replay it anytime from the new "❔ Tour" button in the top bar.
 
 ### Fixed
 - The app's own icon was missing from packaged builds, which also broke it from refreshing correctly after an auto-update.
