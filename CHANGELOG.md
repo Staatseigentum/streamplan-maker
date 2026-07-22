@@ -2,6 +2,11 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.10] - 2026-07-22
+
+### Fixed
+- In Custom Layout mode, days you aren't currently streaming on now disappear from the plan entirely, matching every built-in layout — previously their card stayed visible (empty) instead of being hidden along with the rest of that day's elements.
+
 ## [1.0.9] - 2026-07-22
 
 ### Fixed

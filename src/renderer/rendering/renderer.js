@@ -830,12 +830,16 @@ function drawCustomLayout(ctx, activeDays, profile, style, size, highlightRects,
   // Draw order follows the elements array's own order — this IS the z-order
   // (later = on top), user-adjustable via the Layout Editor's "Bring to
   // Front"/"Send to Back" controls and preserved as-is by
-  // sanitizeCustomLayout. A day card the user isn't currently streaming on
-  // still gets drawn (with a "Day Off" placeholder) rather than vanishing —
-  // a custom layout is a deliberate arrangement of all 9 elements, so it
-  // should never silently lose pieces just because that weekday happens to
-  // be unchecked in the schedule right now.
+  // sanitizeCustomLayout. A day card (and its matching dayTime elements) for
+  // a day the user isn't currently streaming on is skipped entirely here —
+  // matching how every built-in layout only shows active days — while the
+  // elements themselves stay untouched in style.customLayout (the Layout
+  // Editor always renders against SAMPLE_PROFILE, where every day is
+  // "active", so nothing about editing/positioning them is affected).
   elements.forEach((el) => {
+    if (el.type === "dayCard" && !activeByDay.has(el.id)) return;
+    if (el.type === "dayTime" && !activeByDay.has(el.dayKey)) return;
+
     const rect = elementRectPx(el, size);
     const [cx, cy] = elementCenterPx(el, size);
     const rotation = el.rotation || 0;
@@ -868,7 +872,7 @@ function drawCustomLayout(ctx, activeDays, profile, style, size, highlightRects,
     applyElementShadow(ctx, el);
 
     if (el.type === "dayCard") {
-      const entry = activeByDay.get(el.id) || { day: el.id, startTime: "Day Off", endTime: null, durationMinutes: null, label: null };
+      const entry = activeByDay.get(el.id);
       const drawSkin = CARD_SKIN_DRAWERS[el.cardStyle] || drawDayCard;
       drawSkin(
         ctx,
@@ -885,13 +889,7 @@ function drawCustomLayout(ctx, activeDays, profile, style, size, highlightRects,
     } else if (el.type === "logo") {
       drawLogoElement(ctx, rect, style);
     } else if (el.type === "dayTime") {
-      const entry = activeByDay.get(el.dayKey) || {
-        day: el.dayKey,
-        startTime: "Day Off",
-        endTime: null,
-        durationMinutes: null,
-        label: null,
-      };
+      const entry = activeByDay.get(el.dayKey);
       drawDayTimeElement(ctx, rect, el, entry, effectiveStyle);
     } else if (el.type === "text") {
       drawTextElement(ctx, rect, el, effectiveStyle);
