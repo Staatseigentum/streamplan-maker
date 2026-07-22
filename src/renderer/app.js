@@ -13,6 +13,7 @@ import { SoftwareSettings } from "./ui/softwareSettings.js";
 import { LayoutEditor } from "./ui/layoutEditor.js";
 import { TemplateStudio } from "./ui/templateStudio.js";
 import { UpdateNotice } from "./ui/updateNotice.js";
+import { OnboardingTour } from "./ui/onboardingTour.js";
 import { DEFAULT_LANGUAGE, setLanguage, t } from "./i18n/index.js";
 
 // A top-level await here delays every synchronous UI-building statement
@@ -46,6 +47,8 @@ function applyStaticTranslations() {
   setText("layoutImportBtn", "topBar.importLayoutBtn");
   setTitle("settingsBtn", "topBar.settingsTooltip");
   setText("settingsBtn", "topBar.settingsBtn");
+  setTitle("helpTourBtn", "topBar.helpTooltip");
+  setText("helpTourBtn", "topBar.helpBtn");
 }
 
 const document_ = createProjectDocument({
@@ -56,6 +59,7 @@ let currentProjectPath = null;
 let currentAppTheme = DEFAULT_APP_THEME_ID;
 let currentDisplayMode = DEFAULT_DISPLAY_MODE;
 let currentPreviewFps = DEFAULT_PREVIEW_FPS;
+let currentTutorialSeen = false;
 applyAppTheme(currentAppTheme);
 
 function debounce(fn, ms) {
@@ -67,8 +71,8 @@ function debounce(fn, ms) {
 }
 
 const scheduleAutosave = debounce(() => {
-  saveAutosave(document_, currentAppTheme, currentDisplayMode, currentPreviewFps, currentLanguage).catch((err) =>
-    console.error("Autosave failed:", err)
+  saveAutosave(document_, currentAppTheme, currentDisplayMode, currentPreviewFps, currentLanguage, currentTutorialSeen).catch(
+    (err) => console.error("Autosave failed:", err)
   );
 }, 800);
 
@@ -78,7 +82,14 @@ function setStatus(text, state) {
   statusBarEl.className = state || "";
 }
 
-const previewCanvas = new PreviewCanvas(document.getElementById("previewCanvas"), currentPreviewFps);
+const previewCanvas = new PreviewCanvas(document.getElementById("previewCanvas"), currentPreviewFps, {
+  onStickerDrag: () => {
+    touch(document_);
+    refreshPreview(true);
+    stylePanel.refreshFields();
+    scheduleAutosave();
+  },
+});
 
 function refreshPreview(immediate) {
   if (immediate) previewCanvas.setDataImmediate(document_.profile, document_.style);
@@ -137,7 +148,7 @@ buildExportBar(document.getElementById("exportBar"), setStatus, {
   getStyle: () => document_.style,
 });
 
-const softwareSettings = new SoftwareSettings(document.getElementById("settingsOverlay"), {
+const softwareSettings = new SoftwareSettings(document.getElementById("settingsOverlay"), document.getElementById("languageConfirmOverlay"), {
   getAppThemeId: () => currentAppTheme,
   onAppThemeChange: (themeId) => {
     currentAppTheme = themeId;
@@ -157,17 +168,42 @@ const softwareSettings = new SoftwareSettings(document.getElementById("settingsO
   },
   getLanguage: () => currentLanguage,
   onLanguageChange: async (lang) => {
+    // Shown immediately, before the async save below — otherwise the gap
+    // between picking a language and the eventual reload (plus the reload's
+    // own blank instant) looks like the app froze rather than just
+    // switching language. The start timestamp is stashed in sessionStorage
+    // (survives the reload, unlike any in-memory JS state) so the fresh
+    // page load — see the classic <script> right after the overlay div in
+    // index.html, which runs before app.js's module graph even starts
+    // resolving — can keep the SAME overlay open across the reload instead
+    // of it flashing closed and then the real UI popping in mid-build.
+    // restoreFromAutosave() below is what actually clears it again, once
+    // the freshly-reloaded app has finished rebuilding its UI.
+    document.getElementById("languageSwitchOverlay").classList.add("open");
+    sessionStorage.setItem("streamplanLangSwitchStart", String(Date.now()));
     currentLanguage = lang;
     setLanguage(lang);
     // Text is already built throughout the app as one-time textContent
     // assignments (no reactive re-render layer) — reloading is far simpler
     // and safer than trying to make ~300 call sites reactive, and it's a
     // deliberate, user-initiated settings change, not a routine action.
-    await saveAutosave(document_, currentAppTheme, currentDisplayMode, currentPreviewFps, currentLanguage);
+    await saveAutosave(document_, currentAppTheme, currentDisplayMode, currentPreviewFps, currentLanguage, currentTutorialSeen);
     window.location.reload();
   },
 });
 document.getElementById("settingsBtn").addEventListener("click", () => softwareSettings.open());
+
+const onboardingTour = new OnboardingTour(
+  document.getElementById("onboardingPromptOverlay"),
+  document.getElementById("onboardingTourOverlay"),
+  {
+    onComplete: () => {
+      currentTutorialSeen = true;
+      scheduleAutosave();
+    },
+  }
+);
+document.getElementById("helpTourBtn").addEventListener("click", () => onboardingTour.replay());
 
 const updateNotice = new UpdateNotice(document.getElementById("updateNoticeOverlay"));
 window.streamplanAPI.onUpdateStatus((payload) => {
@@ -275,6 +311,21 @@ window.addEventListener("keydown", (e) => {
 
 refreshPreview();
 
+// Kept open for at least this long once shown (see onLanguageChange above)
+// so the loading screen reads as a deliberate transition rather than a
+// flash, even on a fast machine where the actual restore work below
+// finishes almost instantly.
+const LANGUAGE_SWITCH_MIN_VISIBLE_MS = 1400;
+
+async function hideLanguageSwitchOverlayIfNeeded() {
+  const startedAt = sessionStorage.getItem("streamplanLangSwitchStart");
+  if (!startedAt) return;
+  const remaining = LANGUAGE_SWITCH_MIN_VISIBLE_MS - (Date.now() - Number(startedAt));
+  if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
+  document.getElementById("languageSwitchOverlay").classList.remove("open");
+  sessionStorage.removeItem("streamplanLangSwitchStart");
+}
+
 (async function restoreFromAutosave() {
   try {
     const restored = await loadAutosave();
@@ -294,14 +345,21 @@ refreshPreview();
       currentPreviewFps = restored.previewFps;
       previewCanvas.setFps(currentPreviewFps);
     }
+    currentTutorialSeen = restored.tutorialSeen === true;
     loadDocumentIntoUi();
     setStatus(t("status.restored"));
   } catch (err) {
     console.error("Could not restore autosave:", err);
+  } finally {
+    await hideLanguageSwitchOverlayIfNeeded();
+    // Fires for brand-new users (no autosave yet) and for anyone updating
+    // into this version from before the tutorial existed (autosave present,
+    // but tutorialSeen was never recorded) — both read as "hasn't seen it".
+    if (!currentTutorialSeen) onboardingTour.promptFirstRun();
   }
 })();
 
 window.__streamplanDoc = document_;
 window.__streamplanPanels = { schedulePanel, stylePanel, previewCanvas, layoutEditor, templateStudio };
 window.__streamplanProject = { newProject, saveProject, openProject };
-window.__streamplanSettings = { softwareSettings, updateNotice, getAppTheme: () => currentAppTheme };
+window.__streamplanSettings = { softwareSettings, updateNotice, onboardingTour, getAppTheme: () => currentAppTheme };

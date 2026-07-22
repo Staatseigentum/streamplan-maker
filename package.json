@@ -1,6 +1,6 @@
 {
   "name": "streamplan-maker",
-  "version": "1.0.6",
+  "version": "1.0.8",
   "description": "Design and export a personalized weekly stream schedule graphic.",
   "main": "src/main/main.js",
   "author": "",
@@ -30,6 +30,7 @@
     "files": [
       "src/**/*",
       "package.json",
+      "build/icon.ico",
       "node_modules/jspdf/dist/jspdf.umd.min.js",
       "node_modules/jszip/dist/jszip.min.js",
       "node_modules/gifenc/dist/gifenc.esm.js",

@@ -30,6 +30,7 @@
       <div id="exportBar"></div>
       <button id="layoutEditorBtn" class="pill" title="Layout Editor">▦ Layout Editor</button>
       <button id="layoutImportBtn" class="pill" title="Import a saved Layout file (.splayout)">⇩ Import Layout</button>
+      <button id="helpTourBtn" class="pill" title="Replay the guided tour">❔ Tour</button>
       <button id="settingsBtn" class="pill" title="Software Settings">⚙ Settings</button>
     </div>
     <div id="body">
@@ -47,6 +48,11 @@
   <div id="layoutEditorOverlay"></div>
   <div id="templateStudioOverlay"></div>
   <div id="updateNoticeOverlay"></div>
+  <div id="languageSwitchOverlay"><div class="language-switch-card"><div class="language-switch-spinner"></div></div></div>
+  <div id="languageConfirmOverlay"></div>
+  <div id="onboardingPromptOverlay"></div>
+  <div id="onboardingTourOverlay"></div>
+  <script src="langSwitchGuard.js"></script>
   <script src="../../node_modules/jspdf/dist/jspdf.umd.min.js"></script>
   <script src="../../node_modules/jszip/dist/jszip.min.js"></script>
   <script type="module" src="app.js"></script>

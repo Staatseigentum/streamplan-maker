@@ -603,4 +603,12 @@ export class StylePanel {
     if (this.gallery) this.gallery.rebuild();
     this._refreshAll();
   }
+
+  // Cheap, non-destructive refresh for external mutations to the live style
+  // object (previewCanvas.js's on-canvas sticker drag) — updates existing
+  // control values (e.g. the Custom Images x/y sliders) in place, without
+  // refreshAll()'s gallery rebuild, so it's safe to call on every drag move.
+  refreshFields() {
+    this._refreshAll();
+  }
 }

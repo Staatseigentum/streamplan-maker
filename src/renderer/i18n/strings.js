@@ -1,8 +1,9 @@
-// UI-chrome string tables. Scope: the app's own interface only — day names
-// (constants.js DAY_NAMES / DAY_LABELS_SHORT), default profile/text content,
-// and template/theme proper-noun names stay untranslated, since those are
-// either data keys or end up drawn verbatim into the user's exported
-// streamplan graphic (content, not app chrome).
+// UI-chrome string tables, plus a small "render.*" namespace for the
+// literal text drawn into the exported streamplan graphic itself (title,
+// day labels, "until"/empty-state strings) so the output matches the app's
+// language too. constants.js's DAY_NAMES (the underlying "Monday"/etc. data
+// keys) and default profile/text content/template proper-noun names stay
+// untranslated — those are data keys or user content, not display text.
 export const STRINGS = {
   en: {
     // -- common ------------------------------------------------------------
@@ -13,6 +14,7 @@ export const STRINGS = {
     "common.close": "Close",
     "common.loading": "Loading…",
     "common.later": "Later",
+    "common.cancel": "Cancel",
     "common.restartInstall": "Restart & Install",
     "common.remove": "Remove",
     "common.removeImage": "Remove Image",
@@ -36,6 +38,10 @@ export const STRINGS = {
     "common.headingFont": "Heading Font",
     "common.bodyFont": "Body Font",
     "common.customImagesHeader": "Custom Images",
+    "common.next": "Next",
+    "common.back": "Back",
+    "common.skip": "Skip",
+    "common.finish": "Finish",
 
     // -- index.html / topBar ------------------------------------------------
     "topBar.newTooltip": "New Project (Ctrl+N)",
@@ -49,6 +55,8 @@ export const STRINGS = {
     "topBar.importLayoutTooltip": "Import a saved Layout file (.splayout)",
     "topBar.settingsBtn": "⚙ Settings",
     "topBar.settingsTooltip": "Software Settings",
+    "topBar.helpBtn": "❔ Tour",
+    "topBar.helpTooltip": "Replay the guided tour",
 
     // -- app.js status bar ---------------------------------------------------
     "status.newProject": "New project started.",
@@ -97,6 +105,9 @@ export const STRINGS = {
     "settings.languageEnglish": "English",
     "settings.languageGerman": "Deutsch",
     "settings.languageReloadNote": "Changing this reloads the app.",
+    "settings.languageConfirmTitle": "Switch language?",
+    "settings.languageConfirmBody": "The app will reload in {language}. Nothing you've made is affected.",
+    "settings.languageConfirmBtn": "Switch Language",
 
     // -- schedulePanel.js -----------------------------------------------------
     "schedule.startLabel": "Start",
@@ -105,6 +116,15 @@ export const STRINGS = {
     "schedule.modeDuration": "Runs for…",
     "schedule.minutesSuffix": "minutes",
     "schedule.notePlaceholder": "Optional note (game, event…)",
+    "schedule.dayImageChoose": "Choose Image",
+    "schedule.dayImageRemove": "Remove",
+    "schedule.day.Monday": "Monday",
+    "schedule.day.Tuesday": "Tuesday",
+    "schedule.day.Wednesday": "Wednesday",
+    "schedule.day.Thursday": "Thursday",
+    "schedule.day.Friday": "Friday",
+    "schedule.day.Saturday": "Saturday",
+    "schedule.day.Sunday": "Sunday",
     "schedule.streamerNameHeader": "Streamer Name",
     "schedule.namePlaceholder": "e.g. MoonlitPlays",
     "schedule.streamDaysHeader": "Stream Days",
@@ -222,6 +242,7 @@ export const STRINGS = {
     "assets.logoTitle": "Logo / Profile Picture",
     "assets.logoHint": "Shown next to your name at the top of the plan.",
     "assets.logoRecommended": "Recommended: a square image at least 400×400px — it's cropped to a circle.",
+    "assets.logoSizeLabel": "Logo Size",
     "assets.customFontsHeader": "Custom Fonts",
     "assets.headingFontHint": "Used for your name and day labels. .ttf / .otf",
     "assets.bodyFontHint": "Used for times and notes. .ttf / .otf",
@@ -312,6 +333,8 @@ export const STRINGS = {
     "layoutEditor.deleteElementBtn": "🗑 Delete Element",
     "layoutEditor.headerLabel": "Header",
     "layoutEditor.logoLabel": "Logo",
+    "layoutEditor.timeStartLabel": "Start Time",
+    "layoutEditor.timeDurationLabel": "Duration",
     "layoutEditor.textFallback": "Text",
     "layoutEditor.shapeFallback": "Shape",
     "layoutEditor.imageFallback": "Image",
@@ -347,6 +370,46 @@ export const STRINGS = {
     "templateStudio.sidebarHint": "Design this template's colors, fonts, background, and elements all in one place — including its own gradient, texture, and shadow tools.",
     "templateStudio.loadLayoutTitle": "Load a layout saved in the standalone Layout Editor's library",
     "templateStudio.loadLayoutPlaceholder": "— load a saved layout… —",
+
+    // -- rendering (renderer.js) — text drawn into the exported graphic ----
+    "render.title": "WEEKLY STREAM SCHEDULE",
+    "render.until": "until {end}",
+    "render.noDays": "No stream days selected yet.",
+    "render.noDaysHere": "No days here.",
+    "render.weekdays": "WEEKDAYS",
+    "render.weekend": "WEEKEND",
+    "render.day.Monday": "MON",
+    "render.day.Tuesday": "TUE",
+    "render.day.Wednesday": "WED",
+    "render.day.Thursday": "THU",
+    "render.day.Friday": "FRI",
+    "render.day.Saturday": "SAT",
+    "render.day.Sunday": "SUN",
+
+    // -- onboarding tour -----------------------------------------------------
+    "onboarding.welcomeTitle": "Welcome to Streamplan Maker!",
+    "onboarding.welcomeBody": "Would you like a quick guided tour to get an overview of the app? We recommend it — there's a lot here, and the tour only takes about a minute.",
+    "onboarding.startBtn": "Start Tour",
+    "onboarding.skipBtn": "Skip",
+    "onboarding.skipConfirmTitle": "Skip the tour?",
+    "onboarding.skipConfirmBody": "We recommend taking the guided tour — Streamplan Maker has a lot of features, and it only takes about a minute to get an overview.",
+    "onboarding.skipConfirmSkipBtn": "Yes, skip it",
+    "onboarding.skipConfirmBackBtn": "Show me the tour",
+    "onboarding.stepOf": "Step {current} of {total}",
+    "onboarding.step1Title": "Your Project",
+    "onboarding.step1Body": "Create a new plan, open a saved one, or save your progress at any time. Everything also autosaves in the background, so you never lose work.",
+    "onboarding.step2Title": "Your Schedule",
+    "onboarding.step2Body": "Set your streamer name and toggle the days you stream, with a start time and duration for each. This is the actual content of your plan.",
+    "onboarding.step3Title": "Live Preview",
+    "onboarding.step3Body": "Every change you make updates here instantly, so you always see exactly what you'll export.",
+    "onboarding.step4Title": "Style & Design",
+    "onboarding.step4Body": "Pick a template, choose colors and fonts, upload your own background, logo, or images, and fine-tune every visual detail.",
+    "onboarding.step5Title": "Export Your Plan",
+    "onboarding.step5Body": "Export your finished schedule as PNG, JPG, PDF, or an animated GIF, ready to share with your community.",
+    "onboarding.step6Title": "Advanced: Layout Editor",
+    "onboarding.step6Body": "For full creative freedom, the Layout Editor lets you freely move, resize, and rotate every single element by hand.",
+    "onboarding.step7Title": "Settings",
+    "onboarding.step7Body": "Change the app theme, window mode, and language, and check for updates here. You can always replay this tour from the ❔ Tour button in the top bar.",
   },
 
   de: {
@@ -358,6 +421,7 @@ export const STRINGS = {
     "common.close": "Schließen",
     "common.loading": "Lädt…",
     "common.later": "Später",
+    "common.cancel": "Abbrechen",
     "common.restartInstall": "Neustarten & Installieren",
     "common.remove": "Entfernen",
     "common.removeImage": "Bild entfernen",
@@ -381,6 +445,10 @@ export const STRINGS = {
     "common.headingFont": "Überschriftschrift",
     "common.bodyFont": "Textschrift",
     "common.customImagesHeader": "Eigene Bilder",
+    "common.next": "Weiter",
+    "common.back": "Zurück",
+    "common.skip": "Überspringen",
+    "common.finish": "Fertig",
 
     // -- index.html / topBar ------------------------------------------------
     "topBar.newTooltip": "Neues Projekt (Strg+N)",
@@ -394,6 +462,8 @@ export const STRINGS = {
     "topBar.importLayoutTooltip": "Eine gespeicherte Layout-Datei importieren (.splayout)",
     "topBar.settingsBtn": "⚙ Einstellungen",
     "topBar.settingsTooltip": "Programmeinstellungen",
+    "topBar.helpBtn": "❔ Tour",
+    "topBar.helpTooltip": "Die Einführungstour erneut ansehen",
 
     // -- app.js status bar ---------------------------------------------------
     "status.newProject": "Neues Projekt gestartet.",
@@ -442,6 +512,9 @@ export const STRINGS = {
     "settings.languageEnglish": "English",
     "settings.languageGerman": "Deutsch",
     "settings.languageReloadNote": "Beim Ändern wird die App neu geladen.",
+    "settings.languageConfirmTitle": "Sprache wechseln?",
+    "settings.languageConfirmBody": "Die App wird auf {language} neu geladen. Nichts von dem, was du erstellt hast, geht dabei verloren.",
+    "settings.languageConfirmBtn": "Sprache wechseln",
 
     // -- schedulePanel.js -----------------------------------------------------
     "schedule.startLabel": "Start",
@@ -450,6 +523,15 @@ export const STRINGS = {
     "schedule.modeDuration": "Dauert…",
     "schedule.minutesSuffix": "Minuten",
     "schedule.notePlaceholder": "Optionale Notiz (Spiel, Event…)",
+    "schedule.dayImageChoose": "Bild wählen",
+    "schedule.dayImageRemove": "Entfernen",
+    "schedule.day.Monday": "Montag",
+    "schedule.day.Tuesday": "Dienstag",
+    "schedule.day.Wednesday": "Mittwoch",
+    "schedule.day.Thursday": "Donnerstag",
+    "schedule.day.Friday": "Freitag",
+    "schedule.day.Saturday": "Samstag",
+    "schedule.day.Sunday": "Sonntag",
     "schedule.streamerNameHeader": "Streamer-Name",
     "schedule.namePlaceholder": "z. B. MoonlitPlays",
     "schedule.streamDaysHeader": "Stream-Tage",
@@ -567,6 +649,7 @@ export const STRINGS = {
     "assets.logoTitle": "Logo / Profilbild",
     "assets.logoHint": "Wird neben deinem Namen oben im Plan angezeigt.",
     "assets.logoRecommended": "Empfohlen: ein quadratisches Bild mit mindestens 400×400px — es wird kreisförmig zugeschnitten.",
+    "assets.logoSizeLabel": "Logo-Größe",
     "assets.customFontsHeader": "Eigene Schriftarten",
     "assets.headingFontHint": "Wird für deinen Namen und die Tagesbeschriftungen verwendet. .ttf / .otf",
     "assets.bodyFontHint": "Wird für Zeiten und Notizen verwendet. .ttf / .otf",
@@ -657,6 +740,8 @@ export const STRINGS = {
     "layoutEditor.deleteElementBtn": "🗑 Element löschen",
     "layoutEditor.headerLabel": "Kopfzeile",
     "layoutEditor.logoLabel": "Logo",
+    "layoutEditor.timeStartLabel": "Startzeit",
+    "layoutEditor.timeDurationLabel": "Dauer",
     "layoutEditor.textFallback": "Text",
     "layoutEditor.shapeFallback": "Form",
     "layoutEditor.imageFallback": "Bild",
@@ -692,5 +777,45 @@ export const STRINGS = {
     "templateStudio.sidebarHint": "Gestalte Farben, Schriften, Hintergrund und Elemente dieser Vorlage an einem Ort — inklusive eigener Verlaufs-, Textur- und Schatten-Werkzeuge.",
     "templateStudio.loadLayoutTitle": "Ein in der Bibliothek des eigenständigen Layout-Editors gespeichertes Layout laden",
     "templateStudio.loadLayoutPlaceholder": "— gespeichertes Layout laden… —",
+
+    // -- rendering (renderer.js) — text drawn into the exported graphic ----
+    "render.title": "WÖCHENTLICHER STREAMPLAN",
+    "render.until": "bis {end}",
+    "render.noDays": "Noch keine Streamtage ausgewählt.",
+    "render.noDaysHere": "Keine Tage hier.",
+    "render.weekdays": "WOCHENTAGE",
+    "render.weekend": "WOCHENENDE",
+    "render.day.Monday": "MO",
+    "render.day.Tuesday": "DI",
+    "render.day.Wednesday": "MI",
+    "render.day.Thursday": "DO",
+    "render.day.Friday": "FR",
+    "render.day.Saturday": "SA",
+    "render.day.Sunday": "SO",
+
+    // -- onboarding tour -----------------------------------------------------
+    "onboarding.welcomeTitle": "Willkommen bei Streamplan Maker!",
+    "onboarding.welcomeBody": "Möchtest du eine kurze Führung, um dir einen Überblick über das Programm zu verschaffen? Wir empfehlen es — es gibt hier einiges zu entdecken, und die Tour dauert nur etwa eine Minute.",
+    "onboarding.startBtn": "Tour starten",
+    "onboarding.skipBtn": "Überspringen",
+    "onboarding.skipConfirmTitle": "Tour überspringen?",
+    "onboarding.skipConfirmBody": "Wir empfehlen dir, die Führung mitzumachen — Streamplan Maker hat viele Funktionen, und die Tour dauert nur etwa eine Minute für einen guten Überblick.",
+    "onboarding.skipConfirmSkipBtn": "Ja, überspringen",
+    "onboarding.skipConfirmBackBtn": "Zeig mir die Tour",
+    "onboarding.stepOf": "Schritt {current} von {total}",
+    "onboarding.step1Title": "Dein Projekt",
+    "onboarding.step1Body": "Erstelle einen neuen Plan, öffne einen gespeicherten oder speichere deinen Fortschritt jederzeit. Alles wird zusätzlich automatisch im Hintergrund gesichert, damit nichts verloren geht.",
+    "onboarding.step2Title": "Dein Zeitplan",
+    "onboarding.step2Body": "Lege deinen Streamer-Namen fest und aktiviere die Tage, an denen du streamst, jeweils mit Startzeit und Dauer. Das ist der eigentliche Inhalt deines Plans.",
+    "onboarding.step3Title": "Live-Vorschau",
+    "onboarding.step3Body": "Jede Änderung wird hier sofort angezeigt, damit du immer genau siehst, was du am Ende exportierst.",
+    "onboarding.step4Title": "Stil & Design",
+    "onboarding.step4Body": "Wähle eine Vorlage, passe Farben und Schriften an, lade eigenen Hintergrund, Logo oder Bilder hoch und feile an jedem visuellen Detail.",
+    "onboarding.step5Title": "Deinen Plan exportieren",
+    "onboarding.step5Body": "Exportiere deinen fertigen Zeitplan als PNG, JPG, PDF oder animiertes GIF – bereit zum Teilen mit deiner Community.",
+    "onboarding.step6Title": "Fortgeschritten: Layout-Editor",
+    "onboarding.step6Body": "Für volle kreative Freiheit kannst du im Layout-Editor jedes einzelne Element frei per Hand verschieben, skalieren und drehen.",
+    "onboarding.step7Title": "Einstellungen",
+    "onboarding.step7Body": "Hier änderst du das Programm-Theme, den Fenstermodus und die Sprache und prüfst auf Updates. Über den ❔ Tour-Button in der oberen Leiste kannst du diese Tour jederzeit erneut starten.",
   },
 };

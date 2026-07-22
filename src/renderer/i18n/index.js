@@ -34,3 +34,17 @@ export function t(key, vars) {
   }
   return str;
 }
+
+// The short day label drawn into the exported graphic itself (content, not
+// app chrome) — distinct from DAY_NAMES/entry.day, which stay untranslated
+// English data keys everywhere else in the app.
+export function dayLabelShort(day) {
+  return t(`render.day.${day}`) || day.slice(0, 3).toUpperCase();
+}
+
+// The full day name shown in app chrome (Schedule panel's day checkboxes,
+// etc.) — same "translate the label, not the underlying data key" split as
+// dayLabelShort, just for UI text instead of the exported graphic.
+export function dayLabelFull(day) {
+  return t(`schedule.day.${day}`) || day;
+}

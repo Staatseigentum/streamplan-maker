@@ -1,6 +1,7 @@
 import { DAY_NAMES } from "../../shared/constants.js";
 import { createDayEntry, createStreamerProfile } from "../models/schedule.js";
-import { t } from "../i18n/index.js";
+import { t, dayLabelFull } from "../i18n/index.js";
+import { setImagePreview } from "./assetsTab.js";
 
 class DayRow {
   constructor(dayName, onChange) {
@@ -18,7 +19,7 @@ class DayRow {
     this.checkbox.type = "checkbox";
     const nameSpan = document.createElement("span");
     nameSpan.className = "day-name";
-    nameSpan.textContent = this.dayName;
+    nameSpan.textContent = dayLabelFull(this.dayName);
     header.append(this.checkbox, nameSpan);
     this.el.appendChild(header);
 
@@ -77,8 +78,30 @@ class DayRow {
     this.labelInput.placeholder = t("schedule.notePlaceholder");
     this.details.appendChild(this.labelInput);
 
+    // Optional per-day image (e.g. game cover art), rendered inside this
+    // day's card box by every layout — see rendering/renderer.js's
+    // drawDayCardImage. The path itself lives in this._imagePath (not a DOM
+    // input value); the <img> only ever shows a blob-URL preview of it.
+    this._imagePath = null;
+    const imageRow = document.createElement("div");
+    imageRow.className = "day-image-row";
+    this.imagePreview = document.createElement("img");
+    this.imagePreview.className = "day-image-thumb";
+    imageRow.appendChild(this.imagePreview);
+    this.imageChooseBtn = document.createElement("button");
+    this.imageChooseBtn.type = "button";
+    this.imageChooseBtn.textContent = t("schedule.dayImageChoose");
+    imageRow.appendChild(this.imageChooseBtn);
+    this.imageRemoveBtn = document.createElement("button");
+    this.imageRemoveBtn.type = "button";
+    this.imageRemoveBtn.className = "danger";
+    this.imageRemoveBtn.textContent = t("schedule.dayImageRemove");
+    imageRow.appendChild(this.imageRemoveBtn);
+    this.details.appendChild(imageRow);
+
     this.el.appendChild(this.details);
     this._updateModeVisibility();
+    this._updateImageControls();
 
     this.checkbox.addEventListener("change", () => {
       this.el.classList.toggle("active", this.checkbox.checked);
@@ -91,12 +114,30 @@ class DayRow {
     [this.startInput, this.endInput, this.durationInput, this.labelInput].forEach((input) => {
       input.addEventListener("input", () => this.onChange());
     });
+    this.imageChooseBtn.addEventListener("click", async () => {
+      const path = await window.streamplanAPI.chooseAssetPath("image");
+      if (!path) return;
+      this._imagePath = path;
+      await setImagePreview(this.imagePreview, path);
+      this._updateImageControls();
+      this.onChange();
+    });
+    this.imageRemoveBtn.addEventListener("click", () => {
+      this._imagePath = null;
+      setImagePreview(this.imagePreview, null);
+      this._updateImageControls();
+      this.onChange();
+    });
   }
 
   _updateModeVisibility() {
     const mode = this.modeSelect.value;
     this.endInput.style.display = mode === "end" ? "block" : "none";
     this.durationWrap.style.display = mode === "duration" ? "flex" : "none";
+  }
+
+  _updateImageControls() {
+    this.imageRemoveBtn.disabled = !this._imagePath;
   }
 
   toEntry() {
@@ -108,6 +149,7 @@ class DayRow {
       endTime: mode === "end" ? this.endInput.value || "21:00" : null,
       durationMinutes: mode === "duration" ? Number(this.durationInput.value || 120) : null,
       label: this.labelInput.value.trim() || null,
+      imagePath: this._imagePath,
     });
   }
 
@@ -127,7 +169,12 @@ class DayRow {
         this.modeSelect.value = "none";
       }
       this.labelInput.value = entry.label || "";
+      this._imagePath = entry.imagePath || null;
+    } else {
+      this._imagePath = null;
     }
+    setImagePreview(this.imagePreview, this._imagePath);
+    this._updateImageControls();
     this._updateModeVisibility();
   }
 }

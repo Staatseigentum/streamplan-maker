@@ -43,6 +43,14 @@ export async function buildProjectZipBytes(doc) {
     })
   );
 
+  const dayEntries = dict.profile.days || [];
+  dict.profile.days = await Promise.all(
+    dayEntries.map(async (d, i) => {
+      const rel = await addAssetToZip(zip, d.image_path, `day_image_${i}`);
+      return { ...d, image_path: rel };
+    })
+  );
+
   zip.file("project.json", JSON.stringify(dict, null, 2));
   return zip.generateAsync({ type: "uint8array" });
 }
@@ -88,6 +96,17 @@ export async function loadProjectFromZipBytes(bytes) {
       })
     )
   ).filter(Boolean);
+
+  // Unlike stickers (dropped entirely if their image fails to extract, since
+  // the image IS the sticker), a day's schedule entry is still valid data
+  // without its image — just null the field out rather than losing the day.
+  const dayEntries = dict.profile?.days || [];
+  dict.profile.days = await Promise.all(
+    dayEntries.map(async (d) => {
+      const { path: diskPath } = await extractAssetToTemp(zip, d.image_path);
+      return { ...d, image_path: diskPath };
+    })
+  );
 
   return projectFromDict(dict);
 }

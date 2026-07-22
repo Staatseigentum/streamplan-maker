@@ -64,6 +64,7 @@ export function createStyleConfig({
   logoOffsetX = 0.5,
   logoOffsetY = 0.5,
   logoScale = 1,
+  logoSizeScale = 1,
   backgroundGradientStops = null,
   backgroundGradientAngle = 180,
   backgroundTexture = "none",
@@ -94,6 +95,12 @@ export function createStyleConfig({
     logoOffsetX,
     logoOffsetY,
     logoScale,
+    // The header logo's on-canvas diameter in the 8 built-in layout variants
+    // is otherwise a fixed 140px — this multiplies it (0.6-1.6), independent
+    // of logoScale, which only crops/zooms the source image inside that
+    // circle. Custom Layout mode's logo is a normal resizable element and is
+    // unaffected by this field.
+    logoSizeScale,
     // null = legacy 2-stop gradient straight from colors.background/
     // colors.backgroundEnd (byte-identical to every template saved before
     // this field existed); once set (via the Template Studio's gradient
@@ -145,6 +152,7 @@ export function styleToDict(style) {
     logo_offset_x: style.logoOffsetX,
     logo_offset_y: style.logoOffsetY,
     logo_scale: style.logoScale,
+    logo_size_scale: style.logoSizeScale,
     background_gradient_stops: style.backgroundGradientStops ? style.backgroundGradientStops.map((s) => ({ ...s })) : null,
     background_gradient_angle: style.backgroundGradientAngle,
     background_texture: style.backgroundTexture || "none",
@@ -196,6 +204,7 @@ export function styleFromDict(data) {
     logoOffsetX: clampFraction(data.logo_offset_x, 0, 1, 0.5),
     logoOffsetY: clampFraction(data.logo_offset_y, 0, 1, 0.5),
     logoScale: clampFraction(data.logo_scale, 1, 4, 1),
+    logoSizeScale: clampFraction(data.logo_size_scale, 0.6, 1.6, 1),
     backgroundGradientStops: sanitizeGradientStops(data.background_gradient_stops),
     backgroundGradientAngle: clampFraction(data.background_gradient_angle, 0, 360, 180),
     backgroundTexture: BACKGROUND_TEXTURES.includes(data.background_texture) ? data.background_texture : "none",

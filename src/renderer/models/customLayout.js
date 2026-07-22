@@ -7,12 +7,15 @@
 // so keeping it dependency-free avoids a circular import between them.
 import { CANVAS_WIDTH, CANVAS_HEIGHT, DAY_NAMES } from "../../shared/constants.js";
 
-// The 3 original fixed-slot types, plus 3 freeform types the user can add in
-// any number via the Layout Editor's "+ Text"/"+ Shape"/"+ Image" buttons —
-// unlike dayCard/header/logo, freeform elements aren't part of the required
-// 9-element seed and can be freely added/removed.
-export const CUSTOM_LAYOUT_ELEMENT_TYPES = ["dayCard", "header", "logo", "text", "shape", "image"];
+// The 3 original fixed-slot types, "dayTime" (also fixed-slot — see below),
+// plus 3 freeform types the user can add in any number via the Layout
+// Editor's "+ Text"/"+ Shape"/"+ Image" buttons — unlike dayCard/header/
+// logo/dayTime, freeform elements aren't part of the required seed and can
+// be freely added/removed.
+export const CUSTOM_LAYOUT_ELEMENT_TYPES = ["dayCard", "header", "logo", "dayTime", "text", "shape", "image"];
 export const FREEFORM_ELEMENT_TYPES = ["text", "shape", "image"];
+
+export const DAY_TIME_FIELDS = ["start", "duration"];
 
 // null (or any other value) means "inherit the template's global Card
 // Corners setting" — an element only diverges from the template when the
@@ -39,7 +42,16 @@ export const SHAPE_KINDS = ["rect", "ellipse", "line", "triangle", "diamond", "p
 // NOT tied to this list — it's whatever order the elements array itself is
 // in (user-controlled via the Layout Editor's "Bring to Front"/"Send to
 // Back"); this is just the seed order used by buildDefaultCustomLayoutElements.
-export const CUSTOM_LAYOUT_ELEMENT_IDS = [...DAY_NAMES, "header", "logo"];
+// Each day also gets its own start-time and duration text as independent
+// fixed elements ("<Day>_start"/"<Day>_duration", type "dayTime") — split
+// out from dayCard's own drawing so they can be dragged/restyled on their
+// own, the same way header/logo already can be.
+export const CUSTOM_LAYOUT_ELEMENT_IDS = [
+  ...DAY_NAMES,
+  "header",
+  "logo",
+  ...DAY_NAMES.flatMap((d) => [`${d}_start`, `${d}_duration`]),
+];
 
 // Per-element style overrides — every field is optional/nullable and falls
 // back to the template's global style when unset, so a fresh element always
@@ -73,6 +85,9 @@ export const CUSTOM_LAYOUT_ELEMENT_IDS = [...DAY_NAMES, "header", "logo"];
 //     the way a design tool's shadow would, and composes fine with glow.
 //   shadowBlur/shadowOffsetX/shadowOffsetY/shadowOpacity: all types — only
 //     meaningful once shadowColor is set.
+//   dayKey/timeField: dayTime only — which day's entry this element displays
+//     (one of DAY_NAMES) and which of that entry's two fields ("start" or
+//     "duration", see models/schedule.js's endDisplay()).
 export function createLayoutElement({
   id,
   type,
@@ -104,6 +119,8 @@ export function createLayoutElement({
   shadowOffsetX = 0,
   shadowOffsetY = 8,
   shadowOpacity = 0.6,
+  dayKey = null,
+  timeField = null,
 }) {
   return {
     id,
@@ -136,6 +153,8 @@ export function createLayoutElement({
     shadowOffsetX,
     shadowOffsetY,
     shadowOpacity,
+    dayKey,
+    timeField,
   };
 }
 
@@ -185,6 +204,19 @@ export function buildDefaultCustomLayoutElements() {
   const dayW = (contentX1 - contentX0) / CANVAS_WIDTH;
   const dayH = rowH / CANVAS_HEIGHT;
 
+  // Reproduces drawDayCard's own baked-in start-time/duration placement
+  // (labelX = padX(34) + stripeW(8) from the card's left edge, timeX =
+  // labelX + 190, y = card-center ∓ 14/26px) so a freshly-created layout —
+  // and every existing one auto-migrated by sanitizeCustomLayout below —
+  // looks pixel-identical to today's non-freeform rendering until the user
+  // actually drags one of these two elements somewhere else.
+  const dayX0 = contentX0;
+  const dayX1 = contentX1;
+  const labelX = dayX0 + 34 + 8;
+  const timeX = labelX + 190;
+  const timeW = (dayX1 - timeX - 24) / CANVAS_WIDTH;
+  const timeH = 50 / CANVAS_HEIGHT;
+
   const elements = DAY_NAMES.map((day, i) => {
     const rowY0 = contentY0 + i * (rowH + gap);
     return createLayoutElement({
@@ -199,6 +231,38 @@ export function buildDefaultCustomLayoutElements() {
 
   elements.push(createLayoutElement({ id: "header", type: "header", cx: headerCx, cy: headerCy, w: headerW, h: headerH }));
   elements.push(createLayoutElement({ id: "logo", type: "logo", cx: logoCx, cy: logoCy, w: logoW, h: logoH }));
+
+  DAY_NAMES.forEach((day, i) => {
+    const rowY0 = contentY0 + i * (rowH + gap);
+    const topMidY = rowY0 + rowH / 2;
+    elements.push(
+      createLayoutElement({
+        id: `${day}_start`,
+        type: "dayTime",
+        dayKey: day,
+        timeField: "start",
+        cx: (timeX + (dayX1 - timeX - 24) / 2) / CANVAS_WIDTH,
+        cy: (topMidY - 14) / CANVAS_HEIGHT,
+        w: timeW,
+        h: timeH,
+        align: "left",
+      })
+    );
+    elements.push(
+      createLayoutElement({
+        id: `${day}_duration`,
+        type: "dayTime",
+        dayKey: day,
+        timeField: "duration",
+        cx: (timeX + (dayX1 - timeX - 24) / 2) / CANVAS_WIDTH,
+        cy: (topMidY + 26) / CANVAS_HEIGHT,
+        w: timeW,
+        h: timeH,
+        align: "left",
+      })
+    );
+  });
+
   return elements;
 }
 
@@ -221,6 +285,13 @@ function sanitizeString(value, maxLen) {
 // elements and freeform extras — new fields all default to null/"none"/etc
 // so an element with none of them set (every element saved before this
 // feature existed) renders exactly as it did before.
+// fallback is the matching buildDefaultCustomLayoutElements() entry for a
+// fixed-9-plus-dayTime id, or null for a freeform extra — used so align's
+// (and dayTime's dayKey/timeField's) fallback-when-unset value is that
+// element's own designed default rather than always "center"/null, e.g. a
+// dayTime element's default seed sets align:"left" and this preserves it
+// across a sanitize pass even though the fixed branch below never lists
+// align explicitly itself.
 function sanitizeSharedFields(raw, fallback) {
   return {
     cardStyle: CARD_STYLES.includes(raw.cardStyle) ? raw.cardStyle : null,
@@ -234,6 +305,9 @@ function sanitizeSharedFields(raw, fallback) {
     shadowOffsetX: clampNum(raw.shadowOffsetX, -60, 60, 0),
     shadowOffsetY: clampNum(raw.shadowOffsetY, -60, 60, 8),
     shadowOpacity: clampNum(raw.shadowOpacity, 0.05, 1, 0.6),
+    align: TEXT_ELEMENT_ALIGNS.includes(raw.align) ? raw.align : fallback?.align || "center",
+    dayKey: DAY_NAMES.includes(raw.dayKey) ? raw.dayKey : fallback?.dayKey ?? null,
+    timeField: DAY_TIME_FIELDS.includes(raw.timeField) ? raw.timeField : fallback?.timeField ?? null,
   };
 }
 
@@ -304,7 +378,6 @@ export function sanitizeCustomLayout(rawElements) {
           opacity: clampNum(raw.opacity, 0.05, 1, 1),
           ...sanitizeSharedFields(raw, null),
           text: raw.type === "text" ? sanitizeString(raw.text, 500) ?? "" : "",
-          align: TEXT_ELEMENT_ALIGNS.includes(raw.align) ? raw.align : "center",
           color: sanitizeHexColor(raw.color),
           shapeKind: SHAPE_KINDS.includes(raw.shapeKind) ? raw.shapeKind : "rect",
           fillColor: sanitizeHexColor(raw.fillColor),

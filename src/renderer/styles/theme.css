@@ -184,6 +184,14 @@ html, body {
   border-radius: 4px;
 }
 
+#previewCanvas.sticker-hover {
+  cursor: grab;
+}
+
+#previewCanvas.sticker-dragging {
+  cursor: grabbing;
+}
+
 /* -- Scrollbars -------------------------------------------------------- */
 
 .side-scroll::-webkit-scrollbar {
@@ -442,6 +450,24 @@ input[type="checkbox"]:checked::after {
 }
 .day-row.active .day-details {
   display: flex;
+}
+.day-image-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.day-image-thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  background: #0a0810;
+  border: 1px solid var(--border);
+  object-fit: cover;
+  display: none;
+  flex-shrink: 0;
+}
+.day-image-thumb.visible {
+  display: block;
 }
 
 /* -- Tabs ---------------------------------------------------------------- */
@@ -973,6 +999,282 @@ input[type="checkbox"]:checked::after {
 #updateNoticeOverlay.open {
   display: flex;
 }
+
+/* -- Language-switch loading screen --------------------------------------
+   Shown the instant a new language is picked in Settings, before the async
+   autosave + window.location.reload() that actually applies it — otherwise
+   that gap (and the reload's own blank instant) reads as the app having
+   frozen or broken instead of just switching language. Solid --bg (not a
+   translucent overlay like the others) so it also masks the reload's own
+   flash rather than letting the old page show through underneath it.
+   Uses opacity/visibility (not display) so both showing and hiding fade
+   smoothly instead of cutting instantly — display:none can't be
+   transitioned. langSwitchGuard.js's classic <script> (index.html, runs
+   before app.js's module graph even starts resolving) adds .open on the
+   fresh page BEFORE first paint when a switch is still in flight across
+   the reload, so that first style resolution already computes opacity:1
+   directly — no re-fade-in flash, it just stays continuously visible
+   across the reload the way it visually should. */
+#languageSwitchOverlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.4s ease, visibility 0s linear 0.4s;
+}
+#languageSwitchOverlay.open {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 0.4s ease, visibility 0s linear 0s;
+}
+/* The pop-in card, not the spinner itself, carries the scale/opacity
+   entrance — the spinner's own transform is already busy with the infinite
+   rotation keyframe below, and a CSS animation on `transform` always wins
+   over a transition on the same property, so putting both on one element
+   would just silently drop the pop-in. Starts noticeably small + dropped
+   below center so growing/rising into place with the bounce easing actually
+   reads as "popping in", not just a soft fade. */
+.language-switch-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 30px;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: 1px solid var(--border);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transform: scale(0.45) translateY(22px);
+  transition: opacity 0.3s ease, transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+#languageSwitchOverlay.open .language-switch-card {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+.language-switch-spinner {
+  width: 44px;
+  height: 44px;
+  border: 4px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  border-top-color: var(--accent-bright);
+  border-radius: 50%;
+  animation: language-switch-spin 0.8s linear infinite;
+}
+@keyframes language-switch-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* -- Language-switch confirmation dialog ---------------------------------
+   Stacked above the already-open Settings modal (z-index 60 > its 50) —
+   switching language reloads the whole app, so this guards against firing
+   that by an accidental dropdown click. Self-contained markup/classes
+   rather than reusing .settings-header/.settings-title/.settings-close,
+   which are only styled when nested under #settingsModal specifically. */
+#languageConfirmOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 3, 8, 0.72);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+}
+#languageConfirmOverlay.open {
+  display: flex;
+}
+#languageConfirmModal {
+  width: 380px;
+  max-width: calc(100vw - 64px);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  padding: 22px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+.language-confirm-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #f1ebff;
+  margin-bottom: 8px;
+}
+.language-confirm-body {
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+.language-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* -- Onboarding tour -------------------------------------------------------
+   First-run "want a tour?" prompt (+ its skip nudge) and the guided
+   spotlight tour it can start. Kept above every other overlay (900/890,
+   just under the language-switch screen's 999) since it can also be
+   replayed on demand via the topBar "❔ Tour" button regardless of what
+   else is open. Self-contained classes rather than reusing
+   .settings-header/etc., same reasoning as the language-confirm dialog
+   above — those are only styled when nested under #settingsModal. */
+#onboardingPromptOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 3, 8, 0.72);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 900;
+}
+#onboardingPromptOverlay.open {
+  display: flex;
+}
+.onboarding-modal {
+  display: none;
+  width: 420px;
+  max-width: calc(100vw - 64px);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+.onboarding-modal.visible {
+  display: block;
+}
+.onboarding-modal-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: #f1ebff;
+  margin-bottom: 10px;
+}
+.onboarding-modal-body {
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.6;
+  margin-bottom: 22px;
+}
+.onboarding-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* The tour overlay itself is pointer-events:none while closed so it never
+   sits invisibly in front of the app; opening it flips the whole surface to
+   pointer-events:auto so nothing underneath is clickable during the tour —
+   the spotlight cutout is purely visual, not an interactive hole. */
+#onboardingTourOverlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  z-index: 890;
+  pointer-events: none;
+}
+#onboardingTourOverlay.open {
+  display: block;
+  pointer-events: auto;
+}
+.onboarding-spotlight {
+  position: fixed;
+  border-radius: 14px;
+  border: 2px solid var(--accent-bright);
+  box-shadow:
+    0 0 0 9999px rgba(4, 3, 8, 0.8),
+    0 0 30px 4px color-mix(in srgb, var(--accent-bright) 55%, transparent);
+  pointer-events: none;
+  transition:
+    top 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    left 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.onboarding-tooltip {
+  position: fixed;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  border: 1px solid var(--border-strong);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+  opacity: 0;
+  transform: scale(0.92) translateY(10px);
+  transition:
+    opacity 0.3s ease,
+    transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+    top 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+    left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+#onboardingTourOverlay.open .onboarding-tooltip {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+/* A quick opacity dip on the text while the box glides to its next target,
+   so the content swap reads as a deliberate step change instead of an
+   abrupt jump-cut mid-slide. */
+.onboarding-tooltip-progress,
+.onboarding-tooltip-title,
+.onboarding-tooltip-body {
+  transition: opacity 0.15s ease;
+}
+.onboarding-tooltip.stepping .onboarding-tooltip-progress,
+.onboarding-tooltip.stepping .onboarding-tooltip-title,
+.onboarding-tooltip.stepping .onboarding-tooltip-body {
+  opacity: 0;
+}
+.onboarding-tooltip-progress {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-bright);
+  margin-bottom: 8px;
+}
+.onboarding-tooltip-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #f1ebff;
+  margin-bottom: 8px;
+}
+.onboarding-tooltip-body {
+  color: var(--text-dim);
+  font-size: 13px;
+  line-height: 1.55;
+  margin-bottom: 18px;
+}
+.onboarding-tooltip-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.onboarding-tooltip-actions-right {
+  display: flex;
+  gap: 8px;
+}
+.onboarding-skip-link {
+  background: none;
+  border: none;
+  color: var(--text-faint);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 6px 0;
+}
+.onboarding-skip-link:hover:not(:disabled) {
+  color: var(--text-dim);
+  transform: none;
+  box-shadow: none;
+}
+
 #updateNoticeModal {
   width: 480px;
   max-width: calc(100vw - 64px);

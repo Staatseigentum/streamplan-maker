@@ -13,7 +13,11 @@ function mimeFor(path) {
   return "application/octet-stream";
 }
 
-async function setImagePreview(imgEl, path) {
+// Exported for reuse by schedulePanel.js's per-day image thumbnail — same
+// read-file-as-blob-URL pattern every other DOM <img> preview in the app
+// uses (avoids file:// URLs tainting canvas exports later, per this file's
+// sticker/logo/background previews).
+export async function setImagePreview(imgEl, path) {
   if (!path) {
     imgEl.classList.remove("visible");
     imgEl.removeAttribute("src");
@@ -104,6 +108,11 @@ function buildImageAssetCard({ title, hint, recommendedSize, previewShape, getPa
     });
     slidersWrap.append(offXRow.el, offYRow.el, scaleRow.el);
     sliderRefreshers = [offXRow.refresh, offYRow.refresh, scaleRow.refresh];
+    if (adjustable.getSizeScale) {
+      const sizeRow = buildSliderRow(t("assets.logoSizeLabel"), 0.6, 1.6, 0.05, adjustable.getSizeScale, adjustable.setSizeScale);
+      slidersWrap.appendChild(sizeRow.el);
+      sliderRefreshers.push(sizeRow.refresh);
+    }
   }
   card.appendChild(slidersWrap);
 
@@ -386,6 +395,12 @@ export function buildAssetsTab(container, { getStyle, onStyleChange }) {
       setScale: (v) => {
         const style = getStyle();
         style.logoScale = v;
+        onStyleChange(style);
+      },
+      getSizeScale: () => getStyle().logoSizeScale ?? 1,
+      setSizeScale: (v) => {
+        const style = getStyle();
+        style.logoSizeScale = v;
         onStyleChange(style);
       },
     },

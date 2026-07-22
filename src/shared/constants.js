@@ -15,16 +15,6 @@ export const DAY_NAMES = [
   "Sunday",
 ];
 
-export const DAY_LABELS_SHORT = {
-  Monday: "MON",
-  Tuesday: "TUE",
-  Wednesday: "WED",
-  Thursday: "THU",
-  Friday: "FRI",
-  Saturday: "SAT",
-  Sunday: "SUN",
-};
-
 export const GIF_FRAME_COUNT = 24;
 export const GIF_FRAME_DELAY_MS = 80; // ~1.9s full loop
 

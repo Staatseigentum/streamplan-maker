@@ -97,6 +97,7 @@ export async function loadAutosave() {
     displayMode: payload.displayMode || null,
     previewFps: payload.previewFps || null,
     language: payload.language || null,
+    tutorialSeen: payload.tutorialSeen === true,
   };
 }
 
@@ -116,7 +117,7 @@ export async function loadAutosaveLanguage() {
   }
 }
 
-export async function saveAutosave(doc, appTheme, displayMode, previewFps, language) {
+export async function saveAutosave(doc, appTheme, displayMode, previewFps, language, tutorialSeen) {
   if (!window.streamplanAPI?.getSettingsPath) return;
   const settingsPath = await window.streamplanAPI.getSettingsPath();
   const payload = {
@@ -125,6 +126,7 @@ export async function saveAutosave(doc, appTheme, displayMode, previewFps, langu
     displayMode,
     previewFps,
     language,
+    tutorialSeen: tutorialSeen === true,
     customFonts: libraryToDict(),
     customTemplates: customTemplatesToDict(),
     customLayouts: customLayoutsToDict(),

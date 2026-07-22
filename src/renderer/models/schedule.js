@@ -1,7 +1,12 @@
 import { DAY_NAMES } from "../../shared/constants.js";
 
-export function createDayEntry({ day, startTime, endTime = null, durationMinutes = null, label = null }) {
-  return { day, startTime, endTime, durationMinutes, label };
+// imagePath: an optional per-day image (e.g. game cover art), rendered
+// inside that day's card box — trusted like every other user-referenced
+// asset path in the app (background/logo/sticker/customLayout imagePath),
+// not existence-checked here; a missing file just means the card quietly
+// doesn't show a thumbnail.
+export function createDayEntry({ day, startTime, endTime = null, durationMinutes = null, label = null, imagePath = null }) {
+  return { day, startTime, endTime, durationMinutes, label, imagePath };
 }
 
 export function dayEntryToDict(entry) {
@@ -11,6 +16,7 @@ export function dayEntryToDict(entry) {
     end_time: entry.endTime,
     duration_minutes: entry.durationMinutes,
     label: entry.label,
+    image_path: entry.imagePath,
   };
 }
 
@@ -21,6 +27,7 @@ export function dayEntryFromDict(data) {
     endTime: data.end_time ?? null,
     durationMinutes: data.duration_minutes ?? null,
     label: data.label ?? null,
+    imagePath: data.image_path ?? null,
   });
 }
 

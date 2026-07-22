@@ -28,6 +28,7 @@ function buildSelectRow(labelText, options, getValue, setValue) {
 export class SoftwareSettings {
   constructor(
     overlayEl,
+    confirmOverlayEl,
     {
       getAppThemeId,
       onAppThemeChange,
@@ -40,6 +41,7 @@ export class SoftwareSettings {
     }
   ) {
     this.overlayEl = overlayEl;
+    this.confirmOverlayEl = confirmOverlayEl;
     this.getAppThemeId = getAppThemeId;
     this.onAppThemeChange = onAppThemeChange;
     this.getDisplayMode = getDisplayMode;
@@ -50,6 +52,7 @@ export class SoftwareSettings {
     this.onLanguageChange = onLanguageChange;
     this._refreshers = [];
     this._build();
+    this._buildLanguageConfirmModal();
   }
 
   _build() {
@@ -255,7 +258,16 @@ export class SoftwareSettings {
       t("settings.languageLabel"),
       SUPPORTED_LANGUAGES.map((lang) => [lang, LANGUAGE_LABELS[lang] || lang]),
       this.getLanguage,
-      (lang) => this.onLanguageChange(lang)
+      async (lang) => {
+        if (lang === this.getLanguage()) return;
+        // The <select> already shows the new value at this point (the
+        // browser updates it before firing "change") — reverting via
+        // refresh() on cancel is what actually undoes that, since nothing
+        // else about the app has changed yet.
+        const confirmed = await this._confirmLanguageSwitch(LANGUAGE_LABELS[lang] || lang);
+        if (confirmed) this.onLanguageChange(lang);
+        else languageRow.refresh();
+      }
     );
     container.appendChild(languageRow.el);
     this._refreshers.push(languageRow.refresh);
@@ -375,5 +387,65 @@ export class SoftwareSettings {
 
   close() {
     this.overlayEl.classList.remove("open");
+  }
+
+  // A small dedicated confirm dialog (not the generic settings modal shell —
+  // its .settings-header/.settings-title/.settings-close classes only get
+  // styled when nested under #settingsModal, so this uses its own
+  // self-contained markup/CSS instead) stacked on top of the already-open
+  // Settings modal, since switching language is a disruptive action (full
+  // app reload) that's easy to trigger by accident while browsing the
+  // dropdown.
+  _buildLanguageConfirmModal() {
+    const modal = document.createElement("div");
+    modal.id = "languageConfirmModal";
+
+    this._langConfirmTitle = document.createElement("div");
+    this._langConfirmTitle.className = "language-confirm-title";
+    modal.appendChild(this._langConfirmTitle);
+
+    this._langConfirmBody = document.createElement("div");
+    this._langConfirmBody.className = "language-confirm-body";
+    modal.appendChild(this._langConfirmBody);
+
+    const actions = document.createElement("div");
+    actions.className = "language-confirm-actions";
+    this._langConfirmCancelBtn = document.createElement("button");
+    this._langConfirmConfirmBtn = document.createElement("button");
+    this._langConfirmConfirmBtn.className = "primary";
+    actions.append(this._langConfirmCancelBtn, this._langConfirmConfirmBtn);
+    modal.appendChild(actions);
+
+    this.confirmOverlayEl.appendChild(modal);
+    this.confirmOverlayEl.addEventListener("click", (e) => {
+      if (e.target === this.confirmOverlayEl) this._resolveLanguageConfirm?.(false);
+    });
+  }
+
+  // Resolves once the user picks Cancel or Confirm (or clicks the backdrop,
+  // treated as Cancel). Only one of these can be in flight at a time, which
+  // is fine — the <select> that triggers it is disabled from firing another
+  // "change" until this one's promise settles and its own handler returns.
+  _confirmLanguageSwitch(languageLabel) {
+    this._langConfirmTitle.textContent = t("settings.languageConfirmTitle");
+    this._langConfirmBody.textContent = t("settings.languageConfirmBody", { language: languageLabel });
+    this._langConfirmCancelBtn.textContent = t("common.cancel");
+    this._langConfirmConfirmBtn.textContent = t("settings.languageConfirmBtn");
+    this.confirmOverlayEl.classList.add("open");
+
+    return new Promise((resolve) => {
+      const settle = (result) => {
+        this.confirmOverlayEl.classList.remove("open");
+        this._langConfirmConfirmBtn.removeEventListener("click", onConfirm);
+        this._langConfirmCancelBtn.removeEventListener("click", onCancel);
+        this._resolveLanguageConfirm = null;
+        resolve(result);
+      };
+      const onConfirm = () => settle(true);
+      const onCancel = () => settle(false);
+      this._resolveLanguageConfirm = settle;
+      this._langConfirmConfirmBtn.addEventListener("click", onConfirm);
+      this._langConfirmCancelBtn.addEventListener("click", onCancel);
+    });
   }
 }

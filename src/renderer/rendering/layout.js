@@ -205,6 +205,9 @@ export function buildBackground(ctx, size, style, images) {
 // CanvasImageSource values, hence naturalW/naturalH are passed explicitly
 // rather than read off `source.width`/`source.height` (VideoFrame instead
 // exposes displayWidth/displayHeight).
+// Returns the on-canvas [x0, y0, x1, y1] pixel rect the sticker was drawn
+// into, so callers (previewCanvas.js's drag-to-move hit-testing) can find it
+// again without duplicating this placement math.
 export function drawStickerImage(ctx, source, naturalW, naturalH, sticker, size) {
   const [w, h] = size;
   const drawW = (sticker.scale ?? 0.25) * w;
@@ -215,6 +218,7 @@ export function drawStickerImage(ctx, source, naturalW, naturalH, sticker, size)
   ctx.globalAlpha = sticker.opacity ?? 1;
   ctx.drawImage(source, cx - drawW / 2, cy - drawH / 2, drawW, drawH);
   ctx.restore();
+  return [cx - drawW / 2, cy - drawH / 2, cx + drawW / 2, cy + drawH / 2];
 }
 
 export function computeHeaderRect([w]) {

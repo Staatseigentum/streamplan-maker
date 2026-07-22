@@ -9,7 +9,7 @@
 // The draft is a deep-cloned working copy at all times — nothing here ever
 // touches the live document style until "Apply to Project" (or a library
 // Save/Export) is explicitly clicked.
-import { CANVAS_WIDTH, CANVAS_HEIGHT, DAY_NAMES, DAY_LABELS_SHORT, TEMPLATE_FILE_EXTENSION } from "../../shared/constants.js";
+import { CANVAS_WIDTH, CANVAS_HEIGHT, DAY_NAMES, TEMPLATE_FILE_EXTENSION } from "../../shared/constants.js";
 import { createStreamerProfile, createDayEntry } from "../models/schedule.js";
 import { renderStreamplan } from "../rendering/renderer.js";
 import {
@@ -38,7 +38,7 @@ import {
 } from "./stylePanel.js";
 import { buildSliderRow } from "./formControls.js";
 import { addCustomFontToLibrary, listCustomFonts } from "../rendering/fontLibrary.js";
-import { t } from "../i18n/index.js";
+import { t, dayLabelShort } from "../i18n/index.js";
 
 // Computed lazily (not module-level consts) since this module is statically
 // imported by app.js and evaluated before app.js's own top-level await
@@ -116,9 +116,13 @@ function clamp(v, min, max) {
 }
 
 function elementLabel(el) {
-  if (el.type === "dayCard") return DAY_LABELS_SHORT[el.id] || el.id;
+  if (el.type === "dayCard") return dayLabelShort(el.id);
   if (el.type === "header") return t("layoutEditor.headerLabel");
   if (el.type === "logo") return t("layoutEditor.logoLabel");
+  if (el.type === "dayTime") {
+    const field = el.timeField === "duration" ? t("layoutEditor.timeDurationLabel") : t("layoutEditor.timeStartLabel");
+    return `${dayLabelShort(el.dayKey)} ${field}`;
+  }
   if (el.type === "text") return (el.text || t("layoutEditor.textFallback")).slice(0, 20);
   if (el.type === "shape") return t("layoutEditor.shapeFallback");
   if (el.type === "image") return t("layoutEditor.imageFallback");
@@ -1500,6 +1504,7 @@ export class TemplateStudio {
 
     const isDayCard = el.type === "dayCard";
     const isHeader = el.type === "header";
+    const isDayTime = el.type === "dayTime";
     const isText = el.type === "text";
     const isShape = el.type === "shape";
     const isImage = el.type === "image";
@@ -1509,7 +1514,7 @@ export class TemplateStudio {
     this.accentWrap.style.display = isDayCard || isHeader ? "" : "none";
     this.stripeWrap.style.display = isDayCard ? "" : "none";
     this.cardStyleWrap.style.display = isDayCard ? "" : "none";
-    this.fontWrap.style.display = isDayCard || isHeader || isText ? "" : "none";
+    this.fontWrap.style.display = isDayCard || isHeader || isText || isDayTime ? "" : "none";
     this.textFieldsWrap.style.display = isText ? "" : "none";
     this.shapeFieldsWrap.style.display = isShape ? "" : "none";
     this.imageFieldsWrap.style.display = isImage ? "" : "none";
