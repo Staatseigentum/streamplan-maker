@@ -283,29 +283,7 @@ export class TemplateStudio {
     });
     libraryRow.appendChild(saveBtn);
 
-    const exportBtn = document.createElement("button");
-    exportBtn.textContent = t("common.exportEllipsis");
-    exportBtn.addEventListener("click", async () => {
-      const name = this.nameInput.value.trim() || "Custom Template";
-      const defaultName = `${sanitizeFilename(name)}${TEMPLATE_FILE_EXTENSION}`;
-      let targetPath;
-      try {
-        targetPath = await window.streamplanAPI.chooseSaveTemplatePath(defaultName);
-      } catch (err) {
-        await window.streamplanAPI.showMessage("error", t("common.exportFailedTitle"), t("common.saveDialogError", { message: err.message }));
-        return;
-      }
-      if (!targetPath) return;
-      try {
-        const payload = { name, style: styleToDict(this._draftStyle) };
-        const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2));
-        await window.streamplanAPI.writeFile(targetPath, bytes);
-      } catch (err) {
-        console.error(err);
-        await window.streamplanAPI.showMessage("error", t("common.exportFailedTitle"), err.message);
-      }
-    });
-    libraryRow.appendChild(exportBtn);
+    libraryRow.appendChild(this._buildExportMenu());
 
     const importBtn = document.createElement("button");
     importBtn.textContent = t("common.importEllipsis");
@@ -461,6 +439,120 @@ export class TemplateStudio {
     });
 
     return wrap;
+  }
+
+  // "Export…" toolbar control: a small dropdown (same pattern as the
+  // "+ Shape" menu above) instead of a single button, so exporting can
+  // either save a local .sptemplate file or upload the template straight
+  // to Streamplan Hub.
+  _buildExportMenu() {
+    const wrap = document.createElement("div");
+    wrap.className = "shape-add-menu";
+
+    const menuBtn = document.createElement("button");
+    menuBtn.className = "shape-add-menu-trigger";
+    menuBtn.textContent = `${t("common.exportEllipsis")} ▾`;
+    wrap.appendChild(menuBtn);
+    this._exportMenuBtn = menuBtn;
+
+    const list = document.createElement("div");
+    list.className = "shape-add-menu-list";
+    list.setAttribute("role", "menu");
+    list.setAttribute("aria-label", t("common.exportEllipsis"));
+
+    const localItem = document.createElement("button");
+    localItem.className = "shape-add-menu-item";
+    localItem.type = "button";
+    localItem.textContent = t("common.exportLocalOption");
+    localItem.addEventListener("click", () => {
+      closeMenu();
+      this._exportLocal();
+    });
+    list.appendChild(localItem);
+
+    const uploadItem = document.createElement("button");
+    uploadItem.className = "shape-add-menu-item";
+    uploadItem.type = "button";
+    uploadItem.textContent = t("common.exportUploadOption");
+    uploadItem.addEventListener("click", () => {
+      closeMenu();
+      this._uploadToHub();
+    });
+    list.appendChild(uploadItem);
+
+    wrap.appendChild(list);
+
+    const closeMenu = () => wrap.classList.remove("open");
+    menuBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      wrap.classList.toggle("open");
+    });
+    document.addEventListener("click", (e) => {
+      if (!wrap.contains(e.target)) closeMenu();
+    });
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && wrap.classList.contains("open")) {
+        e.stopPropagation();
+        closeMenu();
+      }
+    });
+
+    return wrap;
+  }
+
+  async _exportLocal() {
+    const name = this.nameInput.value.trim() || "Custom Template";
+    const defaultName = `${sanitizeFilename(name)}${TEMPLATE_FILE_EXTENSION}`;
+    let targetPath;
+    try {
+      targetPath = await window.streamplanAPI.chooseSaveTemplatePath(defaultName);
+    } catch (err) {
+      await window.streamplanAPI.showMessage("error", t("common.exportFailedTitle"), t("common.saveDialogError", { message: err.message }));
+      return;
+    }
+    if (!targetPath) return;
+    try {
+      const payload = { name, style: styleToDict(this._draftStyle) };
+      const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2));
+      await window.streamplanAPI.writeFile(targetPath, bytes);
+    } catch (err) {
+      console.error(err);
+      await window.streamplanAPI.showMessage("error", t("common.exportFailedTitle"), err.message);
+    }
+  }
+
+  // Uploads the template straight to Streamplan Hub instead of saving it
+  // locally — same JSON payload as a local export, just POSTed to the site
+  // (see main process's hub:upload handler for why that runs there rather
+  // than as a renderer-side fetch). A name is required here even though
+  // local export happily falls back to "Custom Template": an unnamed
+  // upload would show up on the community site with nothing to identify
+  // it by.
+  async _uploadToHub() {
+    const name = this.nameInput.value.trim();
+    if (!name) {
+      await window.streamplanAPI.showMessage("error", t("common.uploadNoNameTitle"), t("common.uploadNoNameError"));
+      return;
+    }
+    const prevText = this._exportMenuBtn.textContent;
+    this._exportMenuBtn.disabled = true;
+    this._exportMenuBtn.textContent = t("common.uploadingEllipsis");
+    try {
+      const payload = { name, style: styleToDict(this._draftStyle) };
+      const jsonBytes = new TextEncoder().encode(JSON.stringify(payload, null, 2));
+      const result = await window.streamplanAPI.uploadToHub({ type: "template", name, extension: TEMPLATE_FILE_EXTENSION, jsonBytes });
+      if (result.ok) {
+        await window.streamplanAPI.showMessage("info", t("common.uploadSuccessTitle"), t("common.uploadSuccessBody", { url: result.url }));
+      } else {
+        await window.streamplanAPI.showMessage("error", t("common.uploadFailedTitle"), t("common.uploadNetworkErrorBody"));
+      }
+    } catch (err) {
+      console.error(err);
+      await window.streamplanAPI.showMessage("error", t("common.uploadFailedTitle"), t("common.uploadNetworkErrorBody"));
+    } finally {
+      this._exportMenuBtn.disabled = false;
+      this._exportMenuBtn.textContent = prevText;
+    }
   }
 
   // Two mini-tabs sharing the sidebar: "Style" (the whole template's global

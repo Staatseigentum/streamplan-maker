@@ -41,6 +41,7 @@ contextBridge.exposeInMainWorld("streamplanAPI", {
   },
 
   openExternal: (url) => ipcRenderer.invoke("app:open-external", url),
+  uploadToHub: (payload) => ipcRenderer.invoke("hub:upload", payload),
   onImportRequest: (callback) => {
     const listener = (_event, payload) => callback(payload);
     ipcRenderer.on("protocol:import-request", listener);

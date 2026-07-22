@@ -2,6 +2,11 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.13] - 2026-07-23
+
+### Added
+- The Layout Editor and Template Studio's "Export…" button is now a dropdown: export a local file as before, or upload straight to Streamplan Hub without leaving the app. Uploading uses the name already typed in the editor — Templates and Layouts without a name can't be uploaded, and the app tells you so if you try.
+
 ## [1.0.12] - 2026-07-23
 
 ### Added
