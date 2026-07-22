@@ -326,6 +326,14 @@ button.primary {
   color: #fff;
   font-weight: 700;
   padding: 10px 22px;
+  /* overflow: hidden (needed for the ::after shine sweep below) makes
+     flexbox treat this item's automatic minimum width as 0 instead of its
+     content size, so a flex row with limited space (e.g. #exportBar) could
+     shrink the button below its label's width and silently clip part of
+     the text — most visibly with longer translations like German's "Plan
+     exportieren". flex-shrink: 0 + nowrap keeps it at its natural width. */
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 button.primary::after {
   content: "";

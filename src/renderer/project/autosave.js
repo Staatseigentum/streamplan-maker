@@ -96,10 +96,27 @@ export async function loadAutosave() {
     appTheme: payload.appTheme || null,
     displayMode: payload.displayMode || null,
     previewFps: payload.previewFps || null,
+    language: payload.language || null,
   };
 }
 
-export async function saveAutosave(doc, appTheme, displayMode, previewFps) {
+// Reads just the `language` field, without touching fonts/templates/layouts
+// or parsing the full project — used as a fast synchronous-feeling startup
+// check (see app.js's top-level await) so the very first UI build already
+// happens in the right language instead of flashing English then reloading.
+export async function loadAutosaveLanguage() {
+  if (!window.streamplanAPI?.getSettingsPath) return null;
+  try {
+    const settingsPath = await window.streamplanAPI.getSettingsPath();
+    const bytes = await window.streamplanAPI.readFile(settingsPath);
+    const payload = JSON.parse(new TextDecoder().decode(bytes));
+    return payload?.language || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveAutosave(doc, appTheme, displayMode, previewFps, language) {
   if (!window.streamplanAPI?.getSettingsPath) return;
   const settingsPath = await window.streamplanAPI.getSettingsPath();
   const payload = {
@@ -107,6 +124,7 @@ export async function saveAutosave(doc, appTheme, displayMode, previewFps) {
     appTheme,
     displayMode,
     previewFps,
+    language,
     customFonts: libraryToDict(),
     customTemplates: customTemplatesToDict(),
     customLayouts: customLayoutsToDict(),

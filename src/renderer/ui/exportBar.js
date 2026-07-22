@@ -4,12 +4,13 @@ import { exportGifBytes } from "../export/exportGif.js";
 import { EXPORT_RESOLUTIONS, DEFAULT_EXPORT_RESOLUTION } from "../../shared/constants.js";
 import { renderStreamplan } from "../rendering/renderer.js";
 import { ensureAllStickersLoaded } from "../rendering/gifSticker.js";
+import { t } from "../i18n/index.js";
 
 const FORMAT_META = {
-  png: { label: "PNG Image", ext: "png" },
-  jpg: { label: "JPG Image", ext: "jpg" },
-  pdf: { label: "PDF Document", ext: "pdf" },
-  gif: { label: "Animated GIF", ext: "gif" },
+  png: { label: () => t("export.formatPng"), ext: "png" },
+  jpg: { label: () => t("export.formatJpg"), ext: "jpg" },
+  pdf: { label: () => t("export.formatPdf"), ext: "pdf" },
+  gif: { label: () => t("export.formatGif"), ext: "gif" },
 };
 
 const RESOLUTION_LABELS = {
@@ -29,13 +30,13 @@ export function buildExportBar(container, setStatus, { getProfile, getStyle }) {
   Object.entries(FORMAT_META).forEach(([value, meta]) => {
     const opt = document.createElement("option");
     opt.value = value;
-    opt.textContent = meta.label;
+    opt.textContent = meta.label();
     select.appendChild(opt);
   });
 
   const resolutionSelect = document.createElement("select");
   resolutionSelect.id = "exportResolutionSelect";
-  resolutionSelect.title = "Export resolution";
+  resolutionSelect.title = t("export.resolutionTitle");
   Object.keys(EXPORT_RESOLUTIONS).forEach((key) => {
     const [w, h] = EXPORT_RESOLUTIONS[key];
     const opt = document.createElement("option");
@@ -47,7 +48,7 @@ export function buildExportBar(container, setStatus, { getProfile, getStyle }) {
 
   const button = document.createElement("button");
   button.className = "primary";
-  button.textContent = "Export Plan";
+  button.textContent = t("export.exportButton");
   button.id = "exportButton";
 
   container.append(select, resolutionSelect, button);
@@ -64,19 +65,19 @@ export function buildExportBar(container, setStatus, { getProfile, getStyle }) {
     try {
       path = await window.streamplanAPI.chooseSaveExportPath(defaultName, format);
     } catch (err) {
-      setStatus(`Could not open the save dialog: ${err.message}`, "error");
+      setStatus(t("common.saveDialogError", { message: err.message }), "error");
       return;
     }
     if (!path) return;
 
     button.disabled = true;
-    setStatus(`Exporting ${meta.label}…`);
+    setStatus(t("export.exporting", { format: meta.label() }));
     try {
       await ensureAllStickersLoaded(style);
       let bytes;
       if (format === "gif") {
         bytes = await exportGifBytes(profile, style, resolution, (progress) => {
-          setStatus(`Exporting ${meta.label}… ${Math.round(progress * 100)}%`);
+          setStatus(t("export.exportingProgress", { format: meta.label(), percent: Math.round(progress * 100) }));
         });
       } else {
         const canvas = document.createElement("canvas");
@@ -86,10 +87,10 @@ export function buildExportBar(container, setStatus, { getProfile, getStyle }) {
         else bytes = exportPdfBytes(canvas);
       }
       await window.streamplanAPI.writeFile(path, bytes);
-      setStatus(`Saved to ${path}`, "success");
+      setStatus(t("common.savedTo", { path }), "success");
     } catch (err) {
       console.error(err);
-      setStatus(`Export failed: ${err.message}`, "error");
+      setStatus(t("export.exportFailed", { message: err.message }), "error");
     } finally {
       button.disabled = false;
     }

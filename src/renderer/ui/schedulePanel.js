@@ -1,5 +1,6 @@
 import { DAY_NAMES } from "../../shared/constants.js";
 import { createDayEntry, createStreamerProfile } from "../models/schedule.js";
+import { t } from "../i18n/index.js";
 
 class DayRow {
   constructor(dayName, onChange) {
@@ -27,7 +28,7 @@ class DayRow {
     const startWrap = document.createElement("div");
     const startLabel = document.createElement("label");
     startLabel.className = "field-label";
-    startLabel.textContent = "Start";
+    startLabel.textContent = t("schedule.startLabel");
     this.startInput = document.createElement("input");
     this.startInput.type = "time";
     this.startInput.value = "18:00";
@@ -36,9 +37,9 @@ class DayRow {
 
     this.modeSelect = document.createElement("select");
     [
-      ["none", "No end time"],
-      ["end", "Ends at…"],
-      ["duration", "Runs for…"],
+      ["none", t("schedule.modeNone")],
+      ["end", t("schedule.modeEnd")],
+      ["duration", t("schedule.modeDuration")],
     ].forEach(([value, label]) => {
       const opt = document.createElement("option");
       opt.value = value;
@@ -65,7 +66,7 @@ class DayRow {
     this.durationInput.style.minWidth = "0";
     const durSuffix = document.createElement("span");
     durSuffix.className = "field-hint";
-    durSuffix.textContent = "minutes";
+    durSuffix.textContent = t("schedule.minutesSuffix");
     durSuffix.style.marginBottom = "0";
     durSuffix.style.flexShrink = "0";
     this.durationWrap.append(this.durationInput, durSuffix);
@@ -73,7 +74,7 @@ class DayRow {
 
     this.labelInput = document.createElement("input");
     this.labelInput.type = "text";
-    this.labelInput.placeholder = "Optional note (game, event…)";
+    this.labelInput.placeholder = t("schedule.notePlaceholder");
     this.details.appendChild(this.labelInput);
 
     this.el.appendChild(this.details);
@@ -142,23 +143,23 @@ export class SchedulePanel {
   _build() {
     const header = document.createElement("div");
     header.className = "section-header";
-    header.textContent = "Streamer Name";
+    header.textContent = t("schedule.streamerNameHeader");
     this.container.appendChild(header);
 
     this.nameInput = document.createElement("input");
     this.nameInput.type = "text";
-    this.nameInput.placeholder = "e.g. MoonlitPlays";
+    this.nameInput.placeholder = t("schedule.namePlaceholder");
     this.nameInput.addEventListener("input", () => this.onChange());
     this.container.appendChild(this.nameInput);
 
     const daysHeader = document.createElement("div");
     daysHeader.className = "section-header";
-    daysHeader.textContent = "Stream Days";
+    daysHeader.textContent = t("schedule.streamDaysHeader");
     this.container.appendChild(daysHeader);
 
     const hint = document.createElement("div");
     hint.className = "field-hint";
-    hint.textContent = "Toggle the days you stream and set a time for each.";
+    hint.textContent = t("schedule.daysHint");
     this.container.appendChild(hint);
 
     DAY_NAMES.forEach((day) => {

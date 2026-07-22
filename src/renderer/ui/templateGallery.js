@@ -2,6 +2,7 @@ import { TEMPLATE_ORDER, TEMPLATE_LABELS, TEMPLATE_DESCRIPTIONS, getTemplate, cu
 import { listCustomTemplates } from "../models/customTemplateLibrary.js";
 import { renderStreamplan } from "../rendering/renderer.js";
 import { createStreamerProfile, createDayEntry } from "../models/schedule.js";
+import { t } from "../i18n/index.js";
 
 const SAMPLE_PROFILE = createStreamerProfile({
   displayName: "YourName",
@@ -47,7 +48,7 @@ export class TemplateGallery {
       const removeBtn = document.createElement("button");
       removeBtn.className = "template-card-remove";
       removeBtn.textContent = "✕";
-      removeBtn.title = "Remove from library";
+      removeBtn.title = t("templateGallery.removeTooltip");
       removeBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         this.onRemoveCustom(id);
@@ -64,19 +65,19 @@ export class TemplateGallery {
     this.cards.clear();
 
     TEMPLATE_ORDER.forEach((id) => {
-      this._makeCard(id, getTemplate(id), TEMPLATE_LABELS[id], TEMPLATE_DESCRIPTIONS[id], false);
+      this._makeCard(id, getTemplate(id), TEMPLATE_LABELS[id], t(`templates.desc.${id}`), false);
     });
 
     this._makeCard(
       "custom",
       customBaseStyle(),
-      "Custom",
-      "Build your own from scratch — full control over every color, font and layout.",
+      t("templateGallery.customName"),
+      t("templateGallery.customDesc"),
       false
     );
 
     listCustomTemplates().forEach((tpl) => {
-      this._makeCard(tpl.id, tpl.style, tpl.name, "Your saved custom template.", true);
+      this._makeCard(tpl.id, tpl.style, tpl.name, t("templateGallery.savedCustomDesc"), true);
     });
 
     this.setSelected(this.selectedId);

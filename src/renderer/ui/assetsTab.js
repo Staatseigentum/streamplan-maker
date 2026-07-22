@@ -2,6 +2,7 @@ import { addCustomFontToLibrary } from "../rendering/fontLibrary.js";
 import { drawImageCoverAdjustable, drawCircularImage, hexToRgba } from "../rendering/layout.js";
 import { buildSliderRow } from "./formControls.js";
 import { CANVAS_WIDTH, CANVAS_HEIGHT } from "../../shared/constants.js";
+import { t } from "../i18n/index.js";
 
 function mimeFor(path) {
   const ext = path.split(".").pop().toLowerCase();
@@ -89,15 +90,15 @@ function buildImageAssetCard({ title, hint, recommendedSize, previewShape, getPa
   slidersWrap.style.display = "none";
   let sliderRefreshers = [];
   if (adjustable) {
-    const offXRow = buildSliderRow("Horizontal Position", 0, 1, 0.01, adjustable.getOffsetX, (v) => {
+    const offXRow = buildSliderRow(t("common.horizontalPosition"), 0, 1, 0.01, adjustable.getOffsetX, (v) => {
       adjustable.setOffsetX(v);
       drawPreview();
     });
-    const offYRow = buildSliderRow("Vertical Position", 0, 1, 0.01, adjustable.getOffsetY, (v) => {
+    const offYRow = buildSliderRow(t("common.verticalPosition"), 0, 1, 0.01, adjustable.getOffsetY, (v) => {
       adjustable.setOffsetY(v);
       drawPreview();
     });
-    const scaleRow = buildSliderRow("Zoom", 1, 3, 0.01, adjustable.getScale, (v) => {
+    const scaleRow = buildSliderRow(t("common.zoom"), 1, 3, 0.01, adjustable.getScale, (v) => {
       adjustable.setScale(v);
       drawPreview();
     });
@@ -109,9 +110,9 @@ function buildImageAssetCard({ title, hint, recommendedSize, previewShape, getPa
   const actions = document.createElement("div");
   actions.className = "asset-actions";
   const chooseBtn = document.createElement("button");
-  chooseBtn.textContent = "Upload…";
+  chooseBtn.textContent = t("common.upload");
   const removeBtn = document.createElement("button");
-  removeBtn.textContent = "Remove";
+  removeBtn.textContent = t("common.remove");
   removeBtn.className = "danger";
   actions.append(chooseBtn, removeBtn);
   card.appendChild(actions);
@@ -138,7 +139,7 @@ function buildImageAssetCard({ title, hint, recommendedSize, previewShape, getPa
 
   async function refresh() {
     const path = getPath();
-    filename.textContent = path ? path.split(/[\\/]/).pop() : "No file selected.";
+    filename.textContent = path ? path.split(/[\\/]/).pop() : t("common.noFileSelected");
     removeBtn.disabled = !path;
     previewWrap.style.display = path ? "" : "none";
     slidersWrap.style.display = path && adjustable ? "" : "none";
@@ -184,16 +185,16 @@ function buildFontAssetCard({ title, hint, getFont, onChoose, onRemove }) {
   const actions = document.createElement("div");
   actions.className = "asset-actions";
   const chooseBtn = document.createElement("button");
-  chooseBtn.textContent = "Upload Font…";
+  chooseBtn.textContent = t("common.uploadFont");
   const removeBtn = document.createElement("button");
-  removeBtn.textContent = "Reset";
+  removeBtn.textContent = t("common.reset");
   removeBtn.className = "danger";
   actions.append(chooseBtn, removeBtn);
   card.appendChild(actions);
 
   function refresh() {
     const font = getFont();
-    filename.textContent = font.path ? font.path.split(/[\\/]/).pop() : `Using ${font.family} (system font)`;
+    filename.textContent = font.path ? font.path.split(/[\\/]/).pop() : t("assets.usingSystemFont", { family: font.family });
     removeBtn.disabled = !font.path;
   }
 
@@ -201,14 +202,14 @@ function buildFontAssetCard({ title, hint, getFont, onChoose, onRemove }) {
     const path = await window.streamplanAPI.chooseAssetPath("font");
     if (!path) return;
     chooseBtn.disabled = true;
-    chooseBtn.textContent = "Loading…";
+    chooseBtn.textContent = t("common.loading");
     try {
       const entry = await addCustomFontToLibrary(path);
       onChoose({ family: entry.family, path: entry.path });
       refresh();
     } finally {
       chooseBtn.disabled = false;
-      chooseBtn.textContent = "Upload Font…";
+      chooseBtn.textContent = t("common.uploadFont");
     }
   });
   removeBtn.addEventListener("click", () => {
@@ -237,7 +238,7 @@ function buildStickerCard(sticker, { getStyle, onStyleChange, refresh }) {
   const actions = document.createElement("div");
   actions.className = "asset-actions";
   const removeBtn = document.createElement("button");
-  removeBtn.textContent = "Remove";
+  removeBtn.textContent = t("common.remove");
   removeBtn.className = "danger";
   removeBtn.addEventListener("click", () => {
     const style = getStyle();
@@ -254,17 +255,16 @@ function buildStickerCard(sticker, { getStyle, onStyleChange, refresh }) {
 function buildCustomImagesSection(container, { getStyle, onStyleChange }) {
   const header = document.createElement("div");
   header.className = "section-header";
-  header.textContent = "Custom Images";
+  header.textContent = t("common.customImagesHeader");
   container.appendChild(header);
 
   const hint = document.createElement("div");
   hint.className = "field-hint";
-  hint.textContent =
-    "PNG, JPG or GIF decorations placed on top of your plan. Once uploaded, adjust position, size & opacity per image under Customize.";
+  hint.textContent = t("assets.customImagesHint2");
   container.appendChild(hint);
 
   const uploadBtn = document.createElement("button");
-  uploadBtn.textContent = "Upload Image / GIF…";
+  uploadBtn.textContent = t("assets.uploadImageGifBtn");
   uploadBtn.style.marginBottom = "12px";
   container.appendChild(uploadBtn);
 
@@ -307,13 +307,13 @@ export function buildAssetsTab(container, { getStyle, onStyleChange }) {
 
   const bgHeader = document.createElement("div");
   bgHeader.className = "section-header";
-  bgHeader.textContent = "Background & Logo";
+  bgHeader.textContent = t("assets.bgLogoHeader");
   container.appendChild(bgHeader);
 
   const bgCard = buildImageAssetCard({
-    title: "Background Image",
-    hint: "Uploading a background switches the background mode to Image.",
-    recommendedSize: `Recommended: at least ${CANVAS_WIDTH}×${CANVAS_HEIGHT}px, portrait (4:5) for a crisp background — smaller images get upscaled.`,
+    title: t("assets.bgImageTitle"),
+    hint: t("assets.bgImageHint"),
+    recommendedSize: t("assets.bgImageRecommended", { w: CANVAS_WIDTH, h: CANVAS_HEIGHT }),
     previewShape: "rect",
     getPath: () => getStyle().backgroundImagePath,
     onChoose: async (path) => {
@@ -354,9 +354,9 @@ export function buildAssetsTab(container, { getStyle, onStyleChange }) {
   refreshers.push(bgCard.refresh);
 
   const logoCard = buildImageAssetCard({
-    title: "Logo / Profile Picture",
-    hint: "Shown next to your name at the top of the plan.",
-    recommendedSize: "Recommended: a square image at least 400×400px — it's cropped to a circle.",
+    title: t("assets.logoTitle"),
+    hint: t("assets.logoHint"),
+    recommendedSize: t("assets.logoRecommended"),
     previewShape: "circle",
     getPath: () => getStyle().logoPath,
     onChoose: async (path) => {
@@ -395,12 +395,12 @@ export function buildAssetsTab(container, { getStyle, onStyleChange }) {
 
   const fontHeader = document.createElement("div");
   fontHeader.className = "section-header";
-  fontHeader.textContent = "Custom Fonts";
+  fontHeader.textContent = t("assets.customFontsHeader");
   container.appendChild(fontHeader);
 
   const headingCard = buildFontAssetCard({
-    title: "Heading Font",
-    hint: "Used for your name and day labels. .ttf / .otf",
+    title: t("common.headingFont"),
+    hint: t("assets.headingFontHint"),
     getFont: () => getStyle().fontHeading,
     onChoose: (font) => {
       const style = getStyle();
@@ -417,8 +417,8 @@ export function buildAssetsTab(container, { getStyle, onStyleChange }) {
   refreshers.push(headingCard.refresh);
 
   const bodyCard = buildFontAssetCard({
-    title: "Body Font",
-    hint: "Used for times and notes. .ttf / .otf",
+    title: t("common.bodyFont"),
+    hint: t("assets.bodyFontHint"),
     getFont: () => getStyle().fontBody,
     onChoose: (font) => {
       const style = getStyle();

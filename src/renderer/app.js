@@ -6,12 +6,46 @@ import { StylePanel } from "./ui/stylePanel.js";
 import { PreviewCanvas } from "./ui/previewCanvas.js";
 import { buildExportBar } from "./ui/exportBar.js";
 import { buildProjectZipBytes, loadProjectFromZipBytes } from "./project/projectFile.js";
-import { loadAutosave, saveAutosave } from "./project/autosave.js";
+import { loadAutosave, loadAutosaveLanguage, saveAutosave } from "./project/autosave.js";
 import { PROJECT_FILE_EXTENSION, DEFAULT_DISPLAY_MODE, DEFAULT_PREVIEW_FPS } from "../shared/constants.js";
 import { DEFAULT_APP_THEME_ID, applyAppTheme } from "./ui/appThemes.js";
 import { SoftwareSettings } from "./ui/softwareSettings.js";
 import { LayoutEditor } from "./ui/layoutEditor.js";
 import { UpdateNotice } from "./ui/updateNotice.js";
+import { DEFAULT_LANGUAGE, setLanguage, t } from "./i18n/index.js";
+
+// A top-level await here delays every synchronous UI-building statement
+// below until the stored language is known, so the very first render is
+// already in the right language instead of flashing English and reloading.
+let currentLanguage = (await loadAutosaveLanguage().catch(() => null)) || DEFAULT_LANGUAGE;
+setLanguage(currentLanguage);
+applyStaticTranslations();
+
+function applyStaticTranslations() {
+  const setTitle = (id, key) => {
+    const el = document.getElementById(id);
+    if (el) el.title = t(key);
+  };
+  const setText = (id, key) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = t(key);
+  };
+  setTitle("newProjectBtn", "topBar.newTooltip");
+  setText("newProjectBtn", "common.new");
+  setTitle("openProjectBtn", "topBar.openTooltip");
+  setText("openProjectBtn", "common.open");
+  setTitle("saveProjectBtn", "topBar.saveTooltip");
+  setText("saveProjectBtn", "common.save");
+  setTitle("saveAsProjectBtn", "topBar.saveAsTooltip");
+  setText("saveAsProjectBtn", "common.saveAs");
+  setText("appSubtitle", "topBar.subtitle");
+  setTitle("layoutEditorBtn", "topBar.layoutEditorTooltip");
+  setText("layoutEditorBtn", "topBar.layoutEditorBtn");
+  setTitle("layoutImportBtn", "topBar.importLayoutTooltip");
+  setText("layoutImportBtn", "topBar.importLayoutBtn");
+  setTitle("settingsBtn", "topBar.settingsTooltip");
+  setText("settingsBtn", "topBar.settingsBtn");
+}
 
 const document_ = createProjectDocument({
   profile: createStreamerProfile({ displayName: "Your Streamer Name", days: [] }),
@@ -32,7 +66,7 @@ function debounce(fn, ms) {
 }
 
 const scheduleAutosave = debounce(() => {
-  saveAutosave(document_, currentAppTheme, currentDisplayMode, currentPreviewFps).catch((err) =>
+  saveAutosave(document_, currentAppTheme, currentDisplayMode, currentPreviewFps, currentLanguage).catch((err) =>
     console.error("Autosave failed:", err)
   );
 }, 800);
@@ -111,6 +145,17 @@ const softwareSettings = new SoftwareSettings(document.getElementById("settingsO
     previewCanvas.setFps(fps);
     scheduleAutosave();
   },
+  getLanguage: () => currentLanguage,
+  onLanguageChange: async (lang) => {
+    currentLanguage = lang;
+    setLanguage(lang);
+    // Text is already built throughout the app as one-time textContent
+    // assignments (no reactive re-render layer) — reloading is far simpler
+    // and safer than trying to make ~300 call sites reactive, and it's a
+    // deliberate, user-initiated settings change, not a routine action.
+    await saveAutosave(document_, currentAppTheme, currentDisplayMode, currentPreviewFps, currentLanguage);
+    window.location.reload();
+  },
 });
 document.getElementById("settingsBtn").addEventListener("click", () => softwareSettings.open());
 
@@ -153,7 +198,7 @@ function newProject() {
   touch(document_);
   currentProjectPath = null;
   loadDocumentIntoUi();
-  setStatus("New project started.");
+  setStatus(t("status.newProject"));
   scheduleAutosave();
 }
 
@@ -164,22 +209,22 @@ async function saveProject(forcePrompt) {
     targetPath = await window.streamplanAPI.chooseSaveProjectPath(defaultName);
     if (!targetPath) return;
   }
-  setStatus("Saving project…");
+  setStatus(t("status.savingProject"));
   try {
     const bytes = await buildProjectZipBytes(document_);
     await window.streamplanAPI.writeFile(targetPath, bytes);
     currentProjectPath = targetPath;
-    setStatus(`Project saved to ${targetPath}`, "success");
+    setStatus(t("status.projectSaved", { path: targetPath }), "success");
   } catch (err) {
     console.error(err);
-    setStatus(`Could not save project: ${err.message}`, "error");
+    setStatus(t("status.saveFailed", { message: err.message }), "error");
   }
 }
 
 async function openProject() {
   const targetPath = await window.streamplanAPI.chooseOpenProjectPath();
   if (!targetPath) return;
-  setStatus("Opening project…");
+  setStatus(t("status.openingProject"));
   try {
     const bytes = await window.streamplanAPI.readFile(targetPath);
     const loadedDoc = await loadProjectFromZipBytes(bytes);
@@ -190,11 +235,11 @@ async function openProject() {
     document_.modifiedAt = loadedDoc.modifiedAt;
     currentProjectPath = targetPath;
     loadDocumentIntoUi();
-    setStatus(`Project loaded from ${targetPath}`, "success");
+    setStatus(t("status.projectLoaded", { path: targetPath }), "success");
     scheduleAutosave();
   } catch (err) {
     console.error(err);
-    setStatus(`Could not open project: ${err.message}`, "error");
+    setStatus(t("status.openFailed", { message: err.message }), "error");
   }
 }
 
@@ -240,7 +285,7 @@ refreshPreview();
       previewCanvas.setFps(currentPreviewFps);
     }
     loadDocumentIntoUi();
-    setStatus("Restored your last session.");
+    setStatus(t("status.restored"));
   } catch (err) {
     console.error("Could not restore autosave:", err);
   }

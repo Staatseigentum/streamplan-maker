@@ -27,24 +27,34 @@ import {
   removeCustomLayout,
 } from "../models/customLayoutLibrary.js";
 import { addCustomFontToLibrary, listCustomFonts } from "../rendering/fontLibrary.js";
+import { t } from "../i18n/index.js";
 
-const CARD_STYLE_LABELS = {
-  classic: "Classic",
-  badge: "Badge Node",
-  calendar: "Calendar Cell",
-  ticket: "Ticket Stub",
-  compact: "Compact Inline",
-  ring: "Ring Badge",
-};
-const ANIM_STYLE_LABELS = {
-  none: "None",
-  pulse: "Pulse",
-  drift: "Drift",
-  bob: "Bob",
-  glow: "Glow",
-  spin: "Spin",
-};
-const ANIM_INTENSITY_LABELS = { low: "Low", med: "Medium", high: "High" };
+// Computed lazily (not module-level consts) since this module is statically
+// imported by app.js and evaluated before app.js's own top-level await
+// settles the language — see i18n/index.js.
+function cardStyleLabels() {
+  return {
+    classic: t("layoutEditor.skinClassic"),
+    badge: t("layoutEditor.skinBadge"),
+    calendar: t("layoutEditor.skinCalendar"),
+    ticket: t("layoutEditor.skinTicket"),
+    compact: t("layoutEditor.skinCompact"),
+    ring: t("layoutEditor.skinRing"),
+  };
+}
+function animStyleLabels() {
+  return {
+    none: t("layoutEditor.animNone"),
+    pulse: t("layoutEditor.animPulse"),
+    drift: t("layoutEditor.animDrift"),
+    bob: t("layoutEditor.animBob"),
+    glow: t("layoutEditor.animGlow"),
+    spin: t("layoutEditor.animSpin"),
+  };
+}
+function animIntensityLabels() {
+  return { low: t("layoutEditor.intensityLow"), med: t("layoutEditor.intensityMedium"), high: t("layoutEditor.intensityHigh") };
+}
 const ANIM_TICK_MS = 1000 / 30;
 
 // All 7 days populated (unlike the 3-day gallery-thumbnail sample) so every
@@ -63,11 +73,11 @@ function clamp(v, min, max) {
 
 function elementLabel(el) {
   if (el.type === "dayCard") return DAY_LABELS_SHORT[el.id] || el.id;
-  if (el.type === "header") return "Header";
-  if (el.type === "logo") return "Logo";
-  if (el.type === "text") return (el.text || "Text").slice(0, 20);
-  if (el.type === "shape") return "Shape";
-  if (el.type === "image") return "Image";
+  if (el.type === "header") return t("layoutEditor.headerLabel");
+  if (el.type === "logo") return t("layoutEditor.logoLabel");
+  if (el.type === "text") return (el.text || t("layoutEditor.textFallback")).slice(0, 20);
+  if (el.type === "shape") return t("layoutEditor.shapeFallback");
+  if (el.type === "image") return t("layoutEditor.imageFallback");
   return el.type;
 }
 
@@ -132,11 +142,11 @@ export class LayoutEditor {
 
     const title = document.createElement("div");
     title.className = "layout-editor-title";
-    title.textContent = "Layout Editor";
+    title.textContent = t("layoutEditor.title");
     toolbar.appendChild(title);
 
     const newBtn = document.createElement("button");
-    newBtn.textContent = "New";
+    newBtn.textContent = t("common.new");
     newBtn.addEventListener("click", () => {
       this._draftElements = buildDefaultCustomLayoutElements();
       this._loadedLibraryId = null;
@@ -149,23 +159,23 @@ export class LayoutEditor {
     toolbar.appendChild(newBtn);
 
     const addTextBtn = document.createElement("button");
-    addTextBtn.textContent = "+ Text";
+    addTextBtn.textContent = t("layoutEditor.addText");
     addTextBtn.addEventListener("click", () => this._addFreeformElement("text"));
     toolbar.appendChild(addTextBtn);
 
     const addShapeBtn = document.createElement("button");
-    addShapeBtn.textContent = "+ Shape";
+    addShapeBtn.textContent = t("layoutEditor.addShape");
     addShapeBtn.addEventListener("click", () => this._addFreeformElement("shape"));
     toolbar.appendChild(addShapeBtn);
 
     const addImageBtn = document.createElement("button");
-    addImageBtn.textContent = "+ Image…";
+    addImageBtn.textContent = t("layoutEditor.addImage");
     addImageBtn.addEventListener("click", async () => {
       let path;
       try {
         path = await window.streamplanAPI.chooseAssetPath("sticker");
       } catch (err) {
-        await window.streamplanAPI.showMessage("error", "Import failed", `Could not open the file dialog: ${err.message}`);
+        await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("common.fileDialogError", { message: err.message }));
         return;
       }
       if (!path) return;
@@ -179,7 +189,7 @@ export class LayoutEditor {
 
     this.applyBtn = document.createElement("button");
     this.applyBtn.className = "primary";
-    this.applyBtn.textContent = "Apply to this Template";
+    this.applyBtn.textContent = t("layoutEditor.applyBtn");
     this.applyBtn.addEventListener("click", () => {
       if (this._onApply) this._onApply(this._draftElements.map((el) => ({ ...el })));
       this.close();
@@ -187,7 +197,7 @@ export class LayoutEditor {
     toolbar.appendChild(this.applyBtn);
 
     const closeBtn = document.createElement("button");
-    closeBtn.textContent = "✕ Close";
+    closeBtn.textContent = t("layoutEditor.closeBtn");
     closeBtn.addEventListener("click", () => this.close());
     toolbar.appendChild(closeBtn);
 
@@ -196,7 +206,7 @@ export class LayoutEditor {
     libraryRow.className = "layout-editor-library-row";
 
     this.loadSelect = document.createElement("select");
-    this.loadSelect.title = "Load a saved layout";
+    this.loadSelect.title = t("layoutEditor.loadSelectTitle");
     this.loadSelect.addEventListener("change", () => {
       const id = this.loadSelect.value;
       if (!id) return;
@@ -214,11 +224,11 @@ export class LayoutEditor {
 
     this.nameInput = document.createElement("input");
     this.nameInput.type = "text";
-    this.nameInput.placeholder = "Layout name";
+    this.nameInput.placeholder = t("layoutEditor.namePlaceholder");
     libraryRow.appendChild(this.nameInput);
 
     const saveBtn = document.createElement("button");
-    saveBtn.textContent = "Save to Library";
+    saveBtn.textContent = t("common.saveToLibrary");
     saveBtn.addEventListener("click", () => {
       const name = this.nameInput.value.trim() || "Custom Layout";
       if (this._loadedLibraryId && getCustomLayout(this._loadedLibraryId)) {
@@ -232,7 +242,7 @@ export class LayoutEditor {
     libraryRow.appendChild(saveBtn);
 
     const exportBtn = document.createElement("button");
-    exportBtn.textContent = "Export…";
+    exportBtn.textContent = t("common.exportEllipsis");
     exportBtn.addEventListener("click", async () => {
       const name = this.nameInput.value.trim() || "Custom Layout";
       const defaultName = `${sanitizeFilename(name)}${LAYOUT_FILE_EXTENSION}`;
@@ -240,7 +250,7 @@ export class LayoutEditor {
       try {
         targetPath = await window.streamplanAPI.chooseSaveLayoutPath(defaultName);
       } catch (err) {
-        await window.streamplanAPI.showMessage("error", "Export failed", `Could not open the save dialog: ${err.message}`);
+        await window.streamplanAPI.showMessage("error", t("common.exportFailedTitle"), t("common.saveDialogError", { message: err.message }));
         return;
       }
       if (!targetPath) return;
@@ -250,13 +260,13 @@ export class LayoutEditor {
         await window.streamplanAPI.writeFile(targetPath, bytes);
       } catch (err) {
         console.error(err);
-        await window.streamplanAPI.showMessage("error", "Export failed", err.message);
+        await window.streamplanAPI.showMessage("error", t("common.exportFailedTitle"), err.message);
       }
     });
     libraryRow.appendChild(exportBtn);
 
     const importBtn = document.createElement("button");
-    importBtn.textContent = "Import…";
+    importBtn.textContent = t("common.importEllipsis");
     importBtn.addEventListener("click", async () => {
       const entry = await this._importLayoutFromDialog();
       if (!entry) return;
@@ -272,7 +282,7 @@ export class LayoutEditor {
 
     this.deleteLibraryBtn = document.createElement("button");
     this.deleteLibraryBtn.className = "danger";
-    this.deleteLibraryBtn.textContent = "Delete from Library";
+    this.deleteLibraryBtn.textContent = t("common.deleteFromLibrary");
     this.deleteLibraryBtn.addEventListener("click", () => {
       if (!this._loadedLibraryId) return;
       removeCustomLayout(this._loadedLibraryId);
@@ -322,8 +332,7 @@ export class LayoutEditor {
   _buildPropertyPanel(container) {
     this.propEmpty = document.createElement("div");
     this.propEmpty.className = "field-hint";
-    this.propEmpty.textContent =
-      "Click a day card, the header, or the logo on the canvas to select it, then drag, resize (corner handles), or rotate (top handle) it — or use the fields below for precise values.";
+    this.propEmpty.textContent = t("layoutEditor.emptyHint");
     container.appendChild(this.propEmpty);
 
     this.propTitle = document.createElement("div");
@@ -358,11 +367,11 @@ export class LayoutEditor {
     // Ranges intentionally extend well past 0-100%: elements can be
     // dragged/resized to bleed off the canvas edges or be dramatically
     // over/undersized, for whatever creative effect the user is after.
-    this.inputX = makeNumberRow("Horizontal Position (%)", -50, 150, 0.1, (v) => this._setSelectedField("cx", v / 100));
-    this.inputY = makeNumberRow("Vertical Position (%)", -50, 150, 0.1, (v) => this._setSelectedField("cy", v / 100));
-    this.inputW = makeNumberRow("Width (%)", 2, 250, 0.1, (v) => this._setSelectedField("w", v / 100));
-    this.inputH = makeNumberRow("Height (%)", 2, 250, 0.1, (v) => this._setSelectedField("h", v / 100));
-    this.inputRot = makeNumberRow("Rotation (°)", -180, 180, 1, (v) => this._setSelectedField("rotation", v));
+    this.inputX = makeNumberRow(t("layoutEditor.posXLabel"), -50, 150, 0.1, (v) => this._setSelectedField("cx", v / 100));
+    this.inputY = makeNumberRow(t("layoutEditor.posYLabel"), -50, 150, 0.1, (v) => this._setSelectedField("cy", v / 100));
+    this.inputW = makeNumberRow(t("layoutEditor.widthLabel"), 2, 250, 0.1, (v) => this._setSelectedField("w", v / 100));
+    this.inputH = makeNumberRow(t("layoutEditor.heightLabel"), 2, 250, 0.1, (v) => this._setSelectedField("h", v / 100));
+    this.inputRot = makeNumberRow(t("layoutEditor.rotationLabel"), -180, 180, 1, (v) => this._setSelectedField("rotation", v));
 
     // -- Per-element style overrides — every element starts inheriting the
     // template's global look, so a fresh layout renders identically to
@@ -370,21 +379,21 @@ export class LayoutEditor {
     // one element from the template on demand.
     const styleHeader = document.createElement("div");
     styleHeader.className = "section-header";
-    styleHeader.textContent = "Element Style";
+    styleHeader.textContent = t("layoutEditor.elementStyleHeader");
     this.propFields.appendChild(styleHeader);
 
     this.cornerWrap = document.createElement("div");
     this.cornerWrap.style.marginBottom = "12px";
     const cornerLabel = document.createElement("label");
     cornerLabel.className = "field-label";
-    cornerLabel.textContent = "Corner Style";
+    cornerLabel.textContent = t("layoutEditor.cornerStyleLabel");
     this.cornerWrap.appendChild(cornerLabel);
     this.cornerSelect = document.createElement("select");
     [
-      ["", "Inherit Template"],
-      ["sharp", "Sharp"],
-      ["rounded", "Rounded"],
-      ["pill", "Pill (fully rounded)"],
+      ["", t("layoutEditor.cornerInheritOpt")],
+      ["sharp", t("layoutEditor.cornerSharpOpt")],
+      ["rounded", t("layoutEditor.cornerRoundedOpt")],
+      ["pill", t("layoutEditor.cornerPillOpt")],
     ].forEach(([value, text]) => {
       const opt = document.createElement("option");
       opt.value = value;
@@ -403,7 +412,7 @@ export class LayoutEditor {
     this.stripeCheckbox.type = "checkbox";
     this.stripeCheckbox.addEventListener("change", () => this._setSelectedField("showStripe", this.stripeCheckbox.checked));
     const stripeText = document.createElement("span");
-    stripeText.textContent = "Show accent stripe";
+    stripeText.textContent = t("layoutEditor.showStripeLabel");
     stripeLabel.append(this.stripeCheckbox, stripeText);
     this.stripeWrap.appendChild(stripeLabel);
     this.propFields.appendChild(this.stripeWrap);
@@ -412,7 +421,7 @@ export class LayoutEditor {
     this.accentWrap.style.marginBottom = "12px";
     const accentLabel = document.createElement("label");
     accentLabel.className = "field-label";
-    accentLabel.textContent = "Accent Color Override";
+    accentLabel.textContent = t("layoutEditor.accentColorLabel");
     this.accentWrap.appendChild(accentLabel);
     const accentRow = document.createElement("div");
     accentRow.style.display = "flex";
@@ -423,22 +432,22 @@ export class LayoutEditor {
     this.accentColorInput.className = "color-swatch";
     this.accentColorInput.addEventListener("input", () => this._setSelectedField("accentColor", this.accentColorInput.value));
     const accentResetBtn = document.createElement("button");
-    accentResetBtn.textContent = "Use Template Color";
+    accentResetBtn.textContent = t("layoutEditor.useTemplateColorBtn");
     accentResetBtn.addEventListener("click", () => this._setSelectedField("accentColor", null));
     accentRow.append(this.accentColorInput, accentResetBtn);
     this.accentWrap.appendChild(accentRow);
     this.propFields.appendChild(this.accentWrap);
 
-    this.inputOpacity = makeNumberRow("Opacity (%)", 5, 100, 1, (v) => this._setSelectedField("opacity", v / 100));
+    this.inputOpacity = makeNumberRow(t("layoutEditor.opacityLabel"), 5, 100, 1, (v) => this._setSelectedField("opacity", v / 100));
 
     this.zOrderRow = document.createElement("div");
     this.zOrderRow.className = "asset-actions";
     this.zOrderRow.style.marginTop = "6px";
     const bringFrontBtn = document.createElement("button");
-    bringFrontBtn.textContent = "⬆ Bring to Front";
+    bringFrontBtn.textContent = t("layoutEditor.bringFront");
     bringFrontBtn.addEventListener("click", () => this._bringToFront(this._selectedId));
     const sendBackBtn = document.createElement("button");
-    sendBackBtn.textContent = "⬇ Send to Back";
+    sendBackBtn.textContent = t("layoutEditor.sendBack");
     sendBackBtn.addEventListener("click", () => this._sendToBack(this._selectedId));
     this.zOrderRow.append(bringFrontBtn, sendBackBtn);
     this.propFields.appendChild(this.zOrderRow);
@@ -515,7 +524,7 @@ export class LayoutEditor {
     row.appendChild(input);
     if (onReset) {
       const resetBtn = document.createElement("button");
-      resetBtn.textContent = "Reset";
+      resetBtn.textContent = t("common.reset");
       resetBtn.addEventListener("click", onReset);
       row.appendChild(resetBtn);
     }
@@ -529,13 +538,14 @@ export class LayoutEditor {
   _buildCardStyleSection() {
     const header = document.createElement("div");
     header.className = "section-header";
-    header.textContent = "Card Skin";
+    header.textContent = t("layoutEditor.cardSkinHeader");
     this.cardSkinSectionHeader = header;
     this.propFields.appendChild(header);
+    const labels = cardStyleLabels();
     const { wrap, select } = this._appendSelectRow(
       this.propFields,
-      "Skin",
-      CARD_STYLES.map((v) => [v === "classic" ? "" : v, CARD_STYLE_LABELS[v]]),
+      t("layoutEditor.skinLabel"),
+      CARD_STYLES.map((v) => [v === "classic" ? "" : v, labels[v]]),
       (value) => this._setSelectedField("cardStyle", value || null)
     );
     this.cardStyleWrap = wrap;
@@ -549,7 +559,7 @@ export class LayoutEditor {
   _buildFontSection() {
     const header = document.createElement("div");
     header.className = "section-header";
-    header.textContent = "Font";
+    header.textContent = t("layoutEditor.fontHeader");
     this.fontSectionHeader = header;
     this.propFields.appendChild(header);
 
@@ -561,7 +571,7 @@ export class LayoutEditor {
     this.fontWrap.appendChild(this.fontFilenameEl);
 
     this.fontLibrarySelect = document.createElement("select");
-    this.fontLibrarySelect.title = "Use an already-uploaded font";
+    this.fontLibrarySelect.title = t("layoutEditor.fontLibraryTitle");
     this.fontLibrarySelect.addEventListener("change", () => {
       const path = this.fontLibrarySelect.value;
       if (!path) return;
@@ -577,11 +587,11 @@ export class LayoutEditor {
     fontBtnRow.className = "asset-actions";
     fontBtnRow.style.marginTop = "6px";
     const fontUploadBtn = document.createElement("button");
-    fontUploadBtn.textContent = "Upload Font…";
+    fontUploadBtn.textContent = t("common.uploadFont");
     fontUploadBtn.addEventListener("click", async () => {
       const prevText = fontUploadBtn.textContent;
       fontUploadBtn.disabled = true;
-      fontUploadBtn.textContent = "Loading…";
+      fontUploadBtn.textContent = t("common.loading");
       try {
         const path = await window.streamplanAPI.chooseAssetPath("font");
         if (path) {
@@ -592,14 +602,14 @@ export class LayoutEditor {
           this._refreshPropertyPanel();
         }
       } catch (err) {
-        await window.streamplanAPI.showMessage("error", "Font upload failed", err.message);
+        await window.streamplanAPI.showMessage("error", t("layoutEditor.fontUploadFailedTitle"), err.message);
       } finally {
         fontUploadBtn.disabled = false;
         fontUploadBtn.textContent = prevText;
       }
     });
     const fontResetBtn = document.createElement("button");
-    fontResetBtn.textContent = "Use Template Font";
+    fontResetBtn.textContent = t("layoutEditor.useTemplateFontBtn");
     fontResetBtn.addEventListener("click", () => {
       this._setSelectedField("fontFamily", null);
       this._setSelectedFieldSilent("fontPath", null);
@@ -616,7 +626,7 @@ export class LayoutEditor {
     this.fontLibrarySelect.innerHTML = "";
     const blank = document.createElement("option");
     blank.value = "";
-    blank.textContent = "— pick from library —";
+    blank.textContent = t("layoutEditor.pickFromLibrary");
     this.fontLibrarySelect.appendChild(blank);
     listCustomFonts().forEach((entry) => {
       const opt = document.createElement("option");
@@ -631,20 +641,22 @@ export class LayoutEditor {
   _buildAnimationSection() {
     const header = document.createElement("div");
     header.className = "section-header";
-    header.textContent = "Animation";
+    header.textContent = t("layoutEditor.animationHeader");
     this.propFields.appendChild(header);
+    const animLabels = animStyleLabels();
     const { wrap: animWrap, select: animSelect } = this._appendSelectRow(
       this.propFields,
-      "Style",
-      ELEMENT_ANIM_STYLES.map((v) => [v === "none" ? "" : v, ANIM_STYLE_LABELS[v]]),
+      t("layoutEditor.animStyleLabel"),
+      ELEMENT_ANIM_STYLES.map((v) => [v === "none" ? "" : v, animLabels[v]]),
       (value) => this._setSelectedField("animStyle", value || null)
     );
     this.animWrap = animWrap;
     this.animSelect = animSelect;
+    const intensityLabels = animIntensityLabels();
     const { wrap: intensityWrap, select: intensitySelect } = this._appendSelectRow(
       this.propFields,
-      "Intensity",
-      ELEMENT_ANIM_INTENSITIES.map((v) => [v, ANIM_INTENSITY_LABELS[v]]),
+      t("layoutEditor.intensityLabel"),
+      ELEMENT_ANIM_INTENSITIES.map((v) => [v, intensityLabels[v]]),
       (value) => this._setSelectedField("animIntensity", value)
     );
     this.animIntensityWrap = intensityWrap;
@@ -656,14 +668,14 @@ export class LayoutEditor {
     this.textFieldsWrap = document.createElement("div");
     const header = document.createElement("div");
     header.className = "section-header";
-    header.textContent = "Text Content";
+    header.textContent = t("layoutEditor.textContentHeader");
     this.textFieldsWrap.appendChild(header);
 
     const textAreaWrap = document.createElement("div");
     textAreaWrap.style.marginBottom = "12px";
     const textLabel = document.createElement("label");
     textLabel.className = "field-label";
-    textLabel.textContent = "Text";
+    textLabel.textContent = t("layoutEditor.textLabel");
     textAreaWrap.appendChild(textLabel);
     this.textArea = document.createElement("textarea");
     this.textArea.rows = 3;
@@ -673,11 +685,11 @@ export class LayoutEditor {
 
     const { select: alignSelect } = this._appendSelectRow(
       this.textFieldsWrap,
-      "Alignment",
+      t("layoutEditor.alignmentLabel"),
       [
-        ["left", "Left"],
-        ["center", "Center"],
-        ["right", "Right"],
+        ["left", t("layoutEditor.alignLeft")],
+        ["center", t("layoutEditor.alignCenter")],
+        ["right", t("layoutEditor.alignRight")],
       ],
       (value) => this._setSelectedField("align", value)
     );
@@ -685,13 +697,13 @@ export class LayoutEditor {
 
     const { input: colorInput } = this._appendColorRow(
       this.textFieldsWrap,
-      "Text Color",
+      t("layoutEditor.textColorLabel"),
       (value) => this._setSelectedField("color", value),
       () => this._setSelectedField("color", null)
     );
     this.textColorInput = colorInput;
 
-    const { input: sizeInput } = this._appendNumberRow(this.textFieldsWrap, "Font Size (% of canvas height)", 1, 30, 0.5, (v) =>
+    const { input: sizeInput } = this._appendNumberRow(this.textFieldsWrap, t("layoutEditor.fontSizeLabel"), 1, 30, 0.5, (v) =>
       this._setSelectedField("fontSize", v / 100)
     );
     this.textSizeInput = sizeInput;
@@ -704,16 +716,16 @@ export class LayoutEditor {
     this.shapeFieldsWrap = document.createElement("div");
     const header = document.createElement("div");
     header.className = "section-header";
-    header.textContent = "Shape";
+    header.textContent = t("layoutEditor.shapeHeader");
     this.shapeFieldsWrap.appendChild(header);
 
     const { select: kindSelect } = this._appendSelectRow(
       this.shapeFieldsWrap,
-      "Shape",
+      t("layoutEditor.shapeKindLabel"),
       [
-        ["rect", "Rectangle"],
-        ["ellipse", "Ellipse"],
-        ["line", "Line"],
+        ["rect", t("layoutEditor.shapeRectOpt")],
+        ["ellipse", t("layoutEditor.shapeEllipseOpt")],
+        ["line", t("layoutEditor.shapeLineOpt")],
       ],
       (value) => this._setSelectedField("shapeKind", value)
     );
@@ -721,7 +733,7 @@ export class LayoutEditor {
 
     const { input: fillInput } = this._appendColorRow(
       this.shapeFieldsWrap,
-      "Fill Color",
+      t("layoutEditor.fillColorLabel"),
       (value) => this._setSelectedField("fillColor", value),
       () => this._setSelectedField("fillColor", null)
     );
@@ -729,13 +741,13 @@ export class LayoutEditor {
 
     const { input: strokeInput } = this._appendColorRow(
       this.shapeFieldsWrap,
-      "Stroke Color",
+      t("layoutEditor.strokeColorLabel"),
       (value) => this._setSelectedField("strokeColor", value),
       () => this._setSelectedField("strokeColor", null)
     );
     this.shapeStrokeInput = strokeInput;
 
-    const { input: strokeWidthInput } = this._appendNumberRow(this.shapeFieldsWrap, "Stroke Width (px)", 0, 60, 1, (v) =>
+    const { input: strokeWidthInput } = this._appendNumberRow(this.shapeFieldsWrap, t("layoutEditor.strokeWidthLabel"), 0, 60, 1, (v) =>
       this._setSelectedField("strokeWidth", v)
     );
     this.shapeStrokeWidthInput = strokeWidthInput;
@@ -748,7 +760,7 @@ export class LayoutEditor {
     this.imageFieldsWrap = document.createElement("div");
     const header = document.createElement("div");
     header.className = "section-header";
-    header.textContent = "Image";
+    header.textContent = t("layoutEditor.imageHeader");
     this.imageFieldsWrap.appendChild(header);
 
     this.imageFilenameEl = document.createElement("div");
@@ -759,13 +771,13 @@ export class LayoutEditor {
     imageBtnRow.className = "asset-actions";
     imageBtnRow.style.marginTop = "6px";
     const imageUploadBtn = document.createElement("button");
-    imageUploadBtn.textContent = "Replace Image…";
+    imageUploadBtn.textContent = t("layoutEditor.replaceImageBtn");
     imageUploadBtn.addEventListener("click", async () => {
       let path;
       try {
         path = await window.streamplanAPI.chooseAssetPath("sticker");
       } catch (err) {
-        await window.streamplanAPI.showMessage("error", "Import failed", `Could not open the file dialog: ${err.message}`);
+        await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("common.fileDialogError", { message: err.message }));
         return;
       }
       if (path) {
@@ -786,7 +798,7 @@ export class LayoutEditor {
     this.deleteWrap.style.marginTop = "18px";
     this.deleteElementBtn = document.createElement("button");
     this.deleteElementBtn.className = "danger";
-    this.deleteElementBtn.textContent = "🗑 Delete Element";
+    this.deleteElementBtn.textContent = t("layoutEditor.deleteElementBtn");
     this.deleteElementBtn.addEventListener("click", () => this._deleteSelectedElement());
     this.deleteWrap.appendChild(this.deleteElementBtn);
     this.propFields.appendChild(this.deleteWrap);
@@ -852,7 +864,7 @@ export class LayoutEditor {
     this.loadSelect.innerHTML = "";
     const blank = document.createElement("option");
     blank.value = "";
-    blank.textContent = "— unsaved draft —";
+    blank.textContent = t("layoutEditor.unsavedDraft");
     this.loadSelect.appendChild(blank);
     listCustomLayouts().forEach((entry) => {
       const opt = document.createElement("option");
@@ -986,7 +998,7 @@ export class LayoutEditor {
     if (active !== this.animSelect) this.animSelect.value = el.animStyle || "";
     if (active !== this.animIntensitySelect) this.animIntensitySelect.value = el.animIntensity || "med";
 
-    this.fontFilenameEl.textContent = el.fontFamily ? `Custom font: ${el.fontFamily}` : "Using the template's font";
+    this.fontFilenameEl.textContent = el.fontFamily ? t("layoutEditor.customFontUsing", { family: el.fontFamily }) : t("layoutEditor.usingTemplateFont");
     this._refreshFontLibrarySelect();
 
     if (active !== this.textArea) this.textArea.value = el.text || "";
@@ -1002,7 +1014,7 @@ export class LayoutEditor {
     if (active !== this.shapeStrokeInput) this.shapeStrokeInput.value = el.strokeColor || "#FFFFFF";
     if (active !== this.shapeStrokeWidthInput) this.shapeStrokeWidthInput.value = String(el.strokeWidth || 0);
 
-    this.imageFilenameEl.textContent = el.imagePath ? el.imagePath.split(/[\\/]/).pop() : "No image chosen";
+    this.imageFilenameEl.textContent = el.imagePath ? el.imagePath.split(/[\\/]/).pop() : t("layoutEditor.noImageChosen");
   }
 
   _startMove(e, el) {
@@ -1114,18 +1126,18 @@ export class LayoutEditor {
     try {
       targetPath = await window.streamplanAPI.chooseOpenLayoutPath();
     } catch (err) {
-      await window.streamplanAPI.showMessage("error", "Import failed", `Could not open the file dialog: ${err.message}`);
+      await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("common.fileDialogError", { message: err.message }));
       return null;
     }
     if (!targetPath) return null;
     try {
       const bytes = await window.streamplanAPI.readFile(targetPath);
       const parsed = JSON.parse(new TextDecoder().decode(bytes));
-      if (!parsed || !parsed.elements) throw new Error("This file isn't a valid Streamplan layout.");
+      if (!parsed || !parsed.elements) throw new Error(t("layoutEditor.invalidLayoutFile"));
       return addCustomLayout({ name: parsed.name || "Imported Layout", elements: parsed.elements });
     } catch (err) {
       console.error(err);
-      await window.streamplanAPI.showMessage("error", "Import failed", `Could not import layout: ${err.message}`);
+      await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("layoutEditor.importLayoutFailed", { message: err.message }));
       return null;
     }
   }

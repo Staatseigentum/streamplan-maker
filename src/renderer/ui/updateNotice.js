@@ -4,9 +4,11 @@
 // not something to run a markdown parser over. Safe to set as innerHTML
 // directly: it originates from this repo's own CHANGELOG.md by way of the
 // release workflow, not from user input.
+import { t } from "../i18n/index.js";
+
 function renderNotesInto(container, html) {
   const trimmed = (html || "").trim();
-  container.innerHTML = trimmed || '<p class="update-notes-empty">No details were provided for this update.</p>';
+  container.innerHTML = trimmed || `<p class="update-notes-empty">${t("updateNotice.noDetails")}</p>`;
 }
 
 export class UpdateNotice {
@@ -33,7 +35,7 @@ export class UpdateNotice {
 
     const hint = document.createElement("div");
     hint.className = "field-hint";
-    hint.textContent = "This update has already downloaded in the background and is ready to install.";
+    hint.textContent = t("updateNotice.hint");
     modal.appendChild(hint);
 
     this.notesEl = document.createElement("div");
@@ -43,11 +45,11 @@ export class UpdateNotice {
     const btnRow = document.createElement("div");
     btnRow.className = "update-notice-actions";
     const laterBtn = document.createElement("button");
-    laterBtn.textContent = "Later";
+    laterBtn.textContent = t("common.later");
     laterBtn.addEventListener("click", () => this.close());
     const installBtn = document.createElement("button");
     installBtn.className = "primary";
-    installBtn.textContent = "Restart & Install";
+    installBtn.textContent = t("common.restartInstall");
     installBtn.addEventListener("click", () => window.streamplanAPI.quitAndInstallUpdate());
     btnRow.append(laterBtn, installBtn);
     modal.appendChild(btnRow);
@@ -59,7 +61,7 @@ export class UpdateNotice {
   }
 
   show({ version, releaseNotes }) {
-    this.title.textContent = `Update v${version} is ready to install`;
+    this.title.textContent = t("updateNotice.title", { version });
     renderNotesInto(this.notesEl, releaseNotes);
     this.overlayEl.classList.add("open");
   }

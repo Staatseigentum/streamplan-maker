@@ -1,11 +1,6 @@
 import { APP_THEMES, applyAppTheme } from "./appThemes.js";
 import { PREVIEW_FPS_OPTIONS } from "../../shared/constants.js";
-
-const DISPLAY_MODE_LABELS = {
-  windowed: "Windowed",
-  fullscreen: "Fullscreen",
-  exclusive: "Exclusive Fullscreen",
-};
+import { SUPPORTED_LANGUAGES, t } from "../i18n/index.js";
 
 function buildSelectRow(labelText, options, getValue, setValue) {
   const wrap = document.createElement("div");
@@ -33,7 +28,16 @@ function buildSelectRow(labelText, options, getValue, setValue) {
 export class SoftwareSettings {
   constructor(
     overlayEl,
-    { getAppThemeId, onAppThemeChange, getDisplayMode, onDisplayModeChange, getPreviewFps, onPreviewFpsChange }
+    {
+      getAppThemeId,
+      onAppThemeChange,
+      getDisplayMode,
+      onDisplayModeChange,
+      getPreviewFps,
+      onPreviewFpsChange,
+      getLanguage,
+      onLanguageChange,
+    }
   ) {
     this.overlayEl = overlayEl;
     this.getAppThemeId = getAppThemeId;
@@ -42,6 +46,8 @@ export class SoftwareSettings {
     this.onDisplayModeChange = onDisplayModeChange;
     this.getPreviewFps = getPreviewFps;
     this.onPreviewFpsChange = onPreviewFpsChange;
+    this.getLanguage = getLanguage;
+    this.onLanguageChange = onLanguageChange;
     this._refreshers = [];
     this._build();
   }
@@ -54,7 +60,7 @@ export class SoftwareSettings {
     header.className = "settings-header";
     const title = document.createElement("div");
     title.className = "settings-title";
-    title.textContent = "Software Settings";
+    title.textContent = t("settings.title");
     const closeBtn = document.createElement("button");
     closeBtn.className = "settings-close";
     closeBtn.textContent = "✕";
@@ -67,9 +73,10 @@ export class SoftwareSettings {
     const panelsWrap = document.createElement("div");
 
     const tabDefs = [
-      ["themes", "Program Themes"],
-      ["display", "Display"],
-      ["updates", "Updates"],
+      ["themes", t("settings.tabThemes")],
+      ["display", t("settings.tabDisplay")],
+      ["language", t("settings.tabLanguage")],
+      ["updates", t("settings.tabUpdates")],
     ];
     const panelEls = {};
     tabDefs.forEach(([id, label], i) => {
@@ -93,8 +100,9 @@ export class SoftwareSettings {
     modal.append(tabs, panelsWrap);
     this._buildThemesTab(panelEls.themes);
     this._buildDisplayTab(panelEls.display);
+    this._buildLanguageTab(panelEls.language);
     this._buildUpdatesTab(panelEls.updates);
-    this.updatesTabBtn = tabs.querySelectorAll(".tab-btn")[2];
+    this.updatesTabBtn = tabs.querySelectorAll(".tab-btn")[3];
 
     this.overlayEl.appendChild(modal);
     this.overlayEl.addEventListener("click", (e) => {
@@ -109,7 +117,7 @@ export class SoftwareSettings {
   _buildThemesTab(container) {
     const hint = document.createElement("div");
     hint.className = "field-hint";
-    hint.textContent = "Choose the editor's own look — 12 static, 13 with an animated backdrop. This only changes the app, not your exported streamplan design.";
+    hint.textContent = t("settings.themesHint");
     container.appendChild(hint);
 
     const miniTabs = document.createElement("div");
@@ -120,8 +128,8 @@ export class SoftwareSettings {
     container.appendChild(miniPanelsWrap);
 
     const groupDefs = [
-      ["static", "Static", (t) => !t.animated],
-      ["animated", "Animated", (t) => t.animated],
+      ["static", t("settings.themesStatic"), (t) => !t.animated],
+      ["animated", t("settings.themesAnimated"), (t) => t.animated],
     ];
     const miniPanelEls = {};
     groupDefs.forEach(([id, label], i) => {
@@ -144,8 +152,7 @@ export class SoftwareSettings {
 
     const animatedWarning = document.createElement("div");
     animatedWarning.className = "field-warning";
-    animatedWarning.innerHTML =
-      '<span class="field-warning-icon">⚠</span><span>Animated themes are more resource-intensive — they keep the GPU busy repainting the chrome the whole time the window is visible. The app automatically pauses all of this the moment the window is minimized, so it costs nothing in the background.</span>';
+    animatedWarning.innerHTML = `<span class="field-warning-icon">⚠</span><span>${t("settings.animatedWarning")}</span>`;
     miniPanelEls.animated.appendChild(animatedWarning);
 
     this.cards = [];
@@ -176,7 +183,7 @@ export class SoftwareSettings {
 
         const tag = document.createElement("div");
         tag.className = "theme-tag";
-        tag.textContent = theme.animated ? "Animated" : "Static";
+        tag.textContent = theme.animated ? t("settings.themesAnimated") : t("settings.themesStatic");
         card.appendChild(tag);
 
         grid.appendChild(card);
@@ -190,16 +197,22 @@ export class SoftwareSettings {
   _buildDisplayTab(container) {
     const hint = document.createElement("div");
     hint.className = "field-hint";
-    hint.textContent = "Control how the app window behaves and how smoothly the live preview animation runs.";
+    hint.textContent = t("settings.displayHint");
     container.appendChild(hint);
 
     const windowHeader = document.createElement("div");
     windowHeader.className = "section-header";
-    windowHeader.textContent = "Window Mode";
+    windowHeader.textContent = t("settings.windowModeHeader");
     container.appendChild(windowHeader);
 
+    const DISPLAY_MODE_LABELS = {
+      windowed: t("settings.displayModeWindowed"),
+      fullscreen: t("settings.displayModeFullscreen"),
+      exclusive: t("settings.displayModeExclusive"),
+    };
+
     const displayModeRow = buildSelectRow(
-      "Display Mode",
+      t("settings.displayModeLabel"),
       Object.entries(DISPLAY_MODE_LABELS),
       this.getDisplayMode,
       (mode) => this.onDisplayModeChange(mode)
@@ -209,12 +222,12 @@ export class SoftwareSettings {
 
     const perfHeader = document.createElement("div");
     perfHeader.className = "section-header";
-    perfHeader.textContent = "Performance";
+    perfHeader.textContent = t("settings.performanceHeader");
     container.appendChild(perfHeader);
 
     const fpsRow = buildSelectRow(
-      "Live Preview Frame Rate",
-      PREVIEW_FPS_OPTIONS.map((fps) => [String(fps), `${fps} FPS`]),
+      t("settings.previewFpsLabel"),
+      PREVIEW_FPS_OPTIONS.map((fps) => [String(fps), t("settings.fpsOption", { fps })]),
       this.getPreviewFps,
       (fps) => this.onPreviewFpsChange(Number(fps))
     );
@@ -223,32 +236,58 @@ export class SoftwareSettings {
 
     const fpsHint = document.createElement("div");
     fpsHint.className = "field-hint";
-    fpsHint.textContent = "Higher frame rates make the shimmer/glow and GIF sticker preview animate more smoothly, at the cost of more CPU usage.";
+    fpsHint.textContent = t("settings.fpsHint");
     container.appendChild(fpsHint);
+  }
+
+  _buildLanguageTab(container) {
+    const hint = document.createElement("div");
+    hint.className = "field-hint";
+    hint.textContent = t("settings.languageHint");
+    container.appendChild(hint);
+
+    const LANGUAGE_LABELS = {
+      en: t("settings.languageEnglish"),
+      de: t("settings.languageGerman"),
+    };
+
+    const languageRow = buildSelectRow(
+      t("settings.languageLabel"),
+      SUPPORTED_LANGUAGES.map((lang) => [lang, LANGUAGE_LABELS[lang] || lang]),
+      this.getLanguage,
+      (lang) => this.onLanguageChange(lang)
+    );
+    container.appendChild(languageRow.el);
+    this._refreshers.push(languageRow.refresh);
+
+    const reloadHint = document.createElement("div");
+    reloadHint.className = "field-hint";
+    reloadHint.textContent = t("settings.languageReloadNote");
+    container.appendChild(reloadHint);
   }
 
   _buildUpdatesTab(container) {
     const hint = document.createElement("div");
     hint.className = "field-hint";
-    hint.textContent = "Streamplan Maker can check GitHub for newer releases and install them automatically.";
+    hint.textContent = t("settings.updatesHint");
     container.appendChild(hint);
 
     const versionHeader = document.createElement("div");
     versionHeader.className = "section-header";
-    versionHeader.textContent = "Version";
+    versionHeader.textContent = t("settings.versionHeader");
     container.appendChild(versionHeader);
 
     const versionLine = document.createElement("div");
     versionLine.className = "field-label";
-    versionLine.textContent = "Loading…";
+    versionLine.textContent = t("common.loading");
     container.appendChild(versionLine);
     window.streamplanAPI.getAppVersion().then((v) => {
-      versionLine.textContent = `Installed version: v${v}`;
+      versionLine.textContent = t("settings.installedVersion", { version: v });
     });
 
     const checkHeader = document.createElement("div");
     checkHeader.className = "section-header";
-    checkHeader.textContent = "Check for Updates";
+    checkHeader.textContent = t("settings.checkUpdatesHeader");
     container.appendChild(checkHeader);
 
     const statusLine = document.createElement("div");
@@ -264,7 +303,7 @@ export class SoftwareSettings {
 
     const checkBtn = document.createElement("button");
     checkBtn.className = "primary";
-    checkBtn.textContent = "Check for Updates";
+    checkBtn.textContent = t("settings.checkUpdatesBtn");
     checkBtn.addEventListener("click", () => {
       checkBtn.disabled = true;
       window.streamplanAPI.checkForUpdates().finally(() => {
@@ -274,7 +313,7 @@ export class SoftwareSettings {
     btnRow.appendChild(checkBtn);
 
     const installBtn = document.createElement("button");
-    installBtn.textContent = "Restart & Install";
+    installBtn.textContent = t("common.restartInstall");
     installBtn.style.display = "none";
     installBtn.addEventListener("click", () => window.streamplanAPI.quitAndInstallUpdate());
     btnRow.appendChild(installBtn);
@@ -282,8 +321,7 @@ export class SoftwareSettings {
     const notPackagedWarning = document.createElement("div");
     notPackagedWarning.className = "field-warning";
     notPackagedWarning.style.marginTop = "14px";
-    notPackagedWarning.innerHTML =
-      '<span class="field-warning-icon">⚠</span><span>You\'re running the development build. Update checks only run in the installed app.</span>';
+    notPackagedWarning.innerHTML = `<span class="field-warning-icon">⚠</span><span>${t("settings.notPackagedWarning")}</span>`;
     notPackagedWarning.style.display = "none";
     container.appendChild(notPackagedWarning);
 
@@ -299,24 +337,24 @@ export class SoftwareSettings {
       installBtn.style.display = "none";
       switch (payload.status) {
         case "checking":
-          statusLine.textContent = "Checking for updates…";
+          statusLine.textContent = t("settings.statusChecking");
           break;
         case "available":
-          statusLine.textContent = `Update found: v${payload.version} — downloading…`;
+          statusLine.textContent = t("settings.statusAvailable", { version: payload.version });
           break;
         case "not-available":
-          statusLine.textContent = "You're up to date.";
+          statusLine.textContent = t("settings.statusNotAvailable");
           break;
         case "downloading":
-          statusLine.textContent = `Downloading update… ${payload.percent}%`;
+          statusLine.textContent = t("settings.statusDownloading", { percent: payload.percent });
           break;
         case "downloaded":
-          statusLine.textContent = `Update v${payload.version} downloaded — ready to install.`;
+          statusLine.textContent = t("settings.statusDownloaded", { version: payload.version });
           installBtn.style.display = "";
           if (settingsBtn) settingsBtn.classList.add("has-update");
           break;
         case "error":
-          statusLine.textContent = `Update check failed: ${payload.message}`;
+          statusLine.textContent = t("settings.statusError", { message: payload.message });
           break;
         default:
           break;

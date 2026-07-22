@@ -2,6 +2,14 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.5] - 2026-07-22
+
+### Added
+- A Language tab in Settings — the app's own interface (menus, panels, buttons, hints) can now be switched between English and a full German translation. Your exported streamplan design itself is unaffected either way.
+
+### Fixed
+- The "Export Plan" button could clip part of its own label in German (longer translated text got cut off instead of fitting the button).
+
 ## [1.0.4] - 2026-07-21
 
 ### Added

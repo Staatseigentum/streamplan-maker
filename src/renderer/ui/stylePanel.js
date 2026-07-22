@@ -13,48 +13,63 @@ import { listCustomFonts } from "../rendering/fontLibrary.js";
 import { listCustomLayouts, getCustomLayout } from "../models/customLayoutLibrary.js";
 import { buildSliderRow } from "./formControls.js";
 import { TEMPLATE_FILE_EXTENSION } from "../../shared/constants.js";
+import { t } from "../i18n/index.js";
 
 function sanitizeFilename(name) {
   const cleaned = (name || "").trim().replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, "_");
   return cleaned || "custom_template";
 }
 
-const COLOR_LABELS = {
-  background: "Background",
-  backgroundEnd: "Background (gradient end)",
-  panel: "Card Panel",
-  accent: "Accent",
-  accentSecondary: "Accent 2",
-  textPrimary: "Text",
-  textSecondary: "Text (muted)",
-  glow: "Glow",
-};
+// Computed lazily (not module-level consts) since these must reflect the
+// language active when the panel is actually built, not whichever language
+// was active when this module was first imported (import evaluation runs
+// before app.js's own top-level await settles the language — see i18n/index.js).
+function colorLabels() {
+  return {
+    background: t("style.colorBackground"),
+    backgroundEnd: t("style.colorBackgroundEnd"),
+    panel: t("style.colorPanel"),
+    accent: t("style.colorAccent"),
+    accentSecondary: t("style.colorAccent2"),
+    textPrimary: t("style.colorText"),
+    textSecondary: t("style.colorTextMuted"),
+    glow: t("style.colorGlow"),
+  };
+}
 
 const SYSTEM_FONTS = ["Georgia", "Segoe UI", "Bahnschrift", "Impact", "Consolas", "Trebuchet MS", "Verdana", "Arial"];
-const LAYOUT_LABELS = {
-  list: "List Rows",
-  grid7: "Grid Nodes",
-  verticalTimeline: "Vertical Timeline",
-  calendarGrid: "Calendar Columns",
-  compactBadges: "Compact Badges",
-  splitColumns: "Weekday / Weekend Split",
-  radialClock: "Radial Clock",
-  ticketStrip: "Ticket Stubs",
-  cascadeFlow: "Cascade Flow",
-  orbitRing: "Orbit Ring",
-  novaRadiate: "Nova Radiate",
-  meteorRow: "Meteor Row",
-};
-const CORNER_LABELS = { sharp: "Sharp Corners", rounded: "Rounded Corners" };
-const BG_MODE_LABELS = { solid: "Solid Color", gradient: "Gradient", image: "Custom Image" };
-const BACKGROUND_ANIM_LABELS = {
-  none: "None",
-  nebulaDrift: "Nebula Drift",
-  aurora: "Aurora",
-  starfield: "Starfield",
-  novaPulse: "Nova Pulse",
-  meteorShower: "Meteor Shower",
-};
+function layoutLabels() {
+  return {
+    list: t("style.layoutListRows"),
+    grid7: t("style.layoutGridNodes"),
+    verticalTimeline: t("style.layoutVerticalTimeline"),
+    calendarGrid: t("style.layoutCalendarColumns"),
+    compactBadges: t("style.layoutCompactBadges"),
+    splitColumns: t("style.layoutWeekdaySplit"),
+    radialClock: t("style.layoutRadialClock"),
+    ticketStrip: t("style.layoutTicketStubs"),
+    cascadeFlow: t("style.layoutCascadeFlow"),
+    orbitRing: t("style.layoutOrbitRing"),
+    novaRadiate: t("style.layoutNovaRadiate"),
+    meteorRow: t("style.layoutMeteorRow"),
+  };
+}
+function cornerLabels() {
+  return { sharp: t("style.cornerSharp"), rounded: t("style.cornerRounded") };
+}
+function bgModeLabels() {
+  return { solid: t("style.bgSolid"), gradient: t("style.bgGradient"), image: t("style.bgImage") };
+}
+function backgroundAnimLabels() {
+  return {
+    none: t("style.animNone"),
+    nebulaDrift: t("style.animNebulaDrift"),
+    aurora: t("style.animAurora"),
+    starfield: t("style.animStarfield"),
+    novaPulse: t("style.animNovaPulse"),
+    meteorShower: t("style.animMeteorShower"),
+  };
+}
 
 function buildSelectRow(labelText, options, getValue, setValue) {
   const wrap = document.createElement("div");
@@ -102,7 +117,7 @@ function buildFontSelectRow(labelText, getFont, setFont) {
     library.forEach((entry) => {
       const opt = document.createElement("option");
       opt.value = entry.family;
-      opt.textContent = `Custom Font: ${entry.displayName}`;
+      opt.textContent = t("style.customFontPrefix", { name: entry.displayName });
       select.appendChild(opt);
       familyPaths.set(entry.family, entry.path);
     });
@@ -120,7 +135,7 @@ function buildFontSelectRow(labelText, getFont, setFont) {
     if (font.path && !familyPaths.has(font.family)) {
       const opt = document.createElement("option");
       opt.value = font.family;
-      opt.textContent = `Custom Font: ${font.path.split(/[\\/]/).pop()}`;
+      opt.textContent = t("style.customFontPrefix", { name: font.path.split(/[\\/]/).pop() });
       select.insertBefore(opt, select.firstChild);
       familyPaths.set(font.family, font.path);
     }
@@ -160,10 +175,10 @@ function buildCustomImageEditor(stickerId, getStyle, onStyleChange, onRemoved) {
   };
 
   [
-    ["Horizontal Position", 0, 1, 0.01, "x", 0.5],
-    ["Vertical Position", 0, 1, 0.01, "y", 0.5],
-    ["Size", 0.05, 0.9, 0.01, "scale", 0.25],
-    ["Opacity", 0.05, 1, 0.01, "opacity", 1],
+    [t("common.horizontalPosition"), 0, 1, 0.01, "x", 0.5],
+    [t("common.verticalPosition"), 0, 1, 0.01, "y", 0.5],
+    [t("style.sizeLabel"), 0.05, 0.9, 0.01, "scale", 0.25],
+    [t("common.opacity"), 0.05, 1, 0.01, "opacity", 1],
   ].forEach(([label, min, max, step, field, fallback]) => {
     const row = buildSliderRow(
       label,
@@ -177,7 +192,7 @@ function buildCustomImageEditor(stickerId, getStyle, onStyleChange, onRemoved) {
   });
 
   const removeBtn = document.createElement("button");
-  removeBtn.textContent = "Remove Image";
+  removeBtn.textContent = t("common.removeImage");
   removeBtn.className = "danger";
   removeBtn.style.marginTop = "4px";
   removeBtn.addEventListener("click", () => {
@@ -196,7 +211,7 @@ function buildColorRow(key, getStyle, onStyleChange) {
   row.className = "swatch-row";
   const label = document.createElement("span");
   label.className = "swatch-label";
-  label.textContent = COLOR_LABELS[key] || key;
+  label.textContent = colorLabels()[key] || key;
   const swatch = document.createElement("input");
   swatch.type = "color";
   swatch.className = "color-swatch";
@@ -230,10 +245,10 @@ export class StylePanel {
     const panelsWrap = document.createElement("div");
 
     const tabDefs = [
-      ["templates", "Templates"],
-      ["customize", "Customize"],
-      ["templateCustomize", "Template Customize"],
-      ["assets", "Assets"],
+      ["templates", t("style.tabTemplates")],
+      ["customize", t("style.tabCustomize")],
+      ["templateCustomize", t("style.tabTemplateCustomize")],
+      ["assets", t("style.tabAssets")],
     ];
     this.tabBtns = {};
     this.panelEls = {};
@@ -284,7 +299,7 @@ export class StylePanel {
   _buildTemplatesTab(panel) {
     const hint = document.createElement("div");
     hint.className = "field-hint";
-    hint.textContent = "Pick a starting look, then fine-tune it in Customize.";
+    hint.textContent = t("style.templatesHint");
     panel.appendChild(hint);
 
     this.gallery = new TemplateGallery(
@@ -326,19 +341,18 @@ export class StylePanel {
   _buildTemplateCustomizeTab(panel) {
     const hint = document.createElement("div");
     hint.className = "field-hint";
-    hint.textContent =
-      "Only visible while a Custom template is selected. Build a fully custom look below, save it to your permanent library, or export/import it as a file.";
+    hint.textContent = t("style.templateCustomizeHint");
     panel.appendChild(hint);
 
     const nameRow = document.createElement("div");
     nameRow.style.marginBottom = "12px";
     const nameLabel = document.createElement("label");
     nameLabel.className = "field-label";
-    nameLabel.textContent = "Template Name";
+    nameLabel.textContent = t("style.templateNameLabel");
     nameRow.appendChild(nameLabel);
     const nameInput = document.createElement("input");
     nameInput.type = "text";
-    nameInput.placeholder = "My Custom Template";
+    nameInput.placeholder = t("style.templateNamePlaceholder");
     nameRow.appendChild(nameInput);
     panel.appendChild(nameRow);
 
@@ -357,7 +371,7 @@ export class StylePanel {
 
     const saveBtn = document.createElement("button");
     saveBtn.className = "primary";
-    saveBtn.textContent = "Save to Library";
+    saveBtn.textContent = t("common.saveToLibrary");
     saveBtn.addEventListener("click", () => {
       const style = this.getStyle();
       const name = nameInput.value.trim() || "Custom Template";
@@ -375,7 +389,7 @@ export class StylePanel {
     actions.appendChild(saveBtn);
 
     const exportBtn = document.createElement("button");
-    exportBtn.textContent = "Export…";
+    exportBtn.textContent = t("common.exportEllipsis");
     exportBtn.addEventListener("click", async () => {
       const style = this.getStyle();
       const name = nameInput.value.trim() || "Custom Template";
@@ -384,7 +398,7 @@ export class StylePanel {
       try {
         targetPath = await window.streamplanAPI.chooseSaveTemplatePath(defaultName);
       } catch (err) {
-        await window.streamplanAPI.showMessage("error", "Export failed", `Could not open the save dialog: ${err.message}`);
+        await window.streamplanAPI.showMessage("error", t("common.exportFailedTitle"), t("common.saveDialogError", { message: err.message }));
         return;
       }
       if (!targetPath) return;
@@ -394,26 +408,26 @@ export class StylePanel {
         await window.streamplanAPI.writeFile(targetPath, bytes);
       } catch (err) {
         console.error(err);
-        await window.streamplanAPI.showMessage("error", "Export failed", err.message);
+        await window.streamplanAPI.showMessage("error", t("common.exportFailedTitle"), err.message);
       }
     });
     actions.appendChild(exportBtn);
 
     const importBtn = document.createElement("button");
-    importBtn.textContent = "Import…";
+    importBtn.textContent = t("common.importEllipsis");
     importBtn.addEventListener("click", async () => {
       let targetPath;
       try {
         targetPath = await window.streamplanAPI.chooseOpenTemplatePath();
       } catch (err) {
-        await window.streamplanAPI.showMessage("error", "Import failed", `Could not open the file dialog: ${err.message}`);
+        await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("common.fileDialogError", { message: err.message }));
         return;
       }
       if (!targetPath) return;
       try {
         const bytes = await window.streamplanAPI.readFile(targetPath);
         const parsed = JSON.parse(new TextDecoder().decode(bytes));
-        if (!parsed || !parsed.style) throw new Error("This file isn't a valid Streamplan template.");
+        if (!parsed || !parsed.style) throw new Error(t("style.invalidTemplateFile"));
         const importedStyle = styleFromDict(parsed.style);
         // Anything imported from a file is, by definition, someone else's
         // work — if it carries a custom layout, that layout is locked
@@ -431,14 +445,14 @@ export class StylePanel {
         this._activateTab("templateCustomize");
       } catch (err) {
         console.error(err);
-        await window.streamplanAPI.showMessage("error", "Import failed", `Could not import template: ${err.message}`);
+        await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("style.importTemplateFailed", { message: err.message }));
       }
     });
     actions.appendChild(importBtn);
 
     const deleteBtn = document.createElement("button");
     deleteBtn.className = "danger";
-    deleteBtn.textContent = "Delete from Library";
+    deleteBtn.textContent = t("common.deleteFromLibrary");
     deleteBtn.addEventListener("click", () => {
       const style = this.getStyle();
       if (style.templateId === "custom" || !isCustomTemplateId(style.templateId)) return;
@@ -461,7 +475,7 @@ export class StylePanel {
 
     const styleHeader = document.createElement("div");
     styleHeader.className = "section-header";
-    styleHeader.textContent = "Style";
+    styleHeader.textContent = t("style.styleHeader");
     panel.appendChild(styleHeader);
 
     this._appendStyleControls(panel, { allowCustomLayout: true });
@@ -486,7 +500,7 @@ export class StylePanel {
     wrap.style.marginBottom = "4px";
     const label = document.createElement("label");
     label.className = "field-label";
-    label.textContent = "Layout Style";
+    label.textContent = t("style.layoutStyleLabel");
     wrap.appendChild(label);
     const select = document.createElement("select");
     wrap.appendChild(select);
@@ -498,8 +512,7 @@ export class StylePanel {
     lockIcon.className = "field-warning-icon";
     lockIcon.textContent = "🔒";
     const lockText = document.createElement("span");
-    lockText.textContent =
-      "This template's layout was imported and is locked — every other setting on this tab can still be changed.";
+    lockText.textContent = t("style.layoutLockedWarning");
     lockHint.append(lockIcon, lockText);
     panel.appendChild(lockHint);
 
@@ -507,7 +520,7 @@ export class StylePanel {
       const style = this.getStyle();
       select.innerHTML = "";
 
-      Object.entries(LAYOUT_LABELS).forEach(([value, text]) => {
+      Object.entries(layoutLabels()).forEach(([value, text]) => {
         const opt = document.createElement("option");
         opt.value = value;
         opt.textContent = text;
@@ -528,7 +541,7 @@ export class StylePanel {
       savedLayouts.forEach((entry) => {
         const opt = document.createElement("option");
         opt.value = `custom:${entry.id}`;
-        opt.textContent = `Custom — ${entry.name}`;
+        opt.textContent = t("style.customLayoutPrefix", { name: entry.name });
         select.appendChild(opt);
       });
 
@@ -537,14 +550,14 @@ export class StylePanel {
         if (!matchedId) {
           const opt = document.createElement("option");
           opt.value = UNSAVED_VALUE;
-          opt.textContent = "Custom Layout (unsaved)";
+          opt.textContent = t("style.customLayoutUnsaved");
           select.appendChild(opt);
         }
       }
 
       const actionOpt = document.createElement("option");
       actionOpt.value = CREATE_VALUE;
-      actionOpt.textContent = hasCustom ? "✎ Edit Custom Layout…" : "✎ Create Custom Layout…";
+      actionOpt.textContent = hasCustom ? t("style.editCustomLayout") : t("style.createCustomLayout");
       select.appendChild(actionOpt);
 
       select.value = selectedValue;
@@ -597,7 +610,7 @@ export class StylePanel {
   _appendStyleControls(panel, { allowCustomLayout = false } = {}) {
     const colorsHeader = document.createElement("div");
     colorsHeader.className = "section-header";
-    colorsHeader.textContent = "Colors";
+    colorsHeader.textContent = t("style.colorsHeader");
     panel.appendChild(colorsHeader);
 
     COLOR_KEYS.forEach((key) => {
@@ -608,11 +621,11 @@ export class StylePanel {
 
     const fontsHeader = document.createElement("div");
     fontsHeader.className = "section-header";
-    fontsHeader.textContent = "Fonts";
+    fontsHeader.textContent = t("style.fontsHeader");
     panel.appendChild(fontsHeader);
 
     const headingRow = buildFontSelectRow(
-      "Heading Font",
+      t("style.headingFontLabel"),
       () => this.getStyle().fontHeading,
       (font) => {
         const style = this.getStyle();
@@ -624,7 +637,7 @@ export class StylePanel {
     this._refreshers.push(headingRow.refresh);
 
     const bodyRow = buildFontSelectRow(
-      "Body Font",
+      t("style.bodyFontLabel"),
       () => this.getStyle().fontBody,
       (font) => {
         const style = this.getStyle();
@@ -637,11 +650,11 @@ export class StylePanel {
 
     const sizeHeader = document.createElement("div");
     sizeHeader.className = "section-header";
-    sizeHeader.textContent = "Text Size";
+    sizeHeader.textContent = t("style.textSizeHeader");
     panel.appendChild(sizeHeader);
 
     const headingSizeRow = buildSliderRow(
-      "Heading Size",
+      t("style.headingSizeLabel"),
       FONT_SCALE_MIN,
       FONT_SCALE_MAX,
       0.05,
@@ -656,7 +669,7 @@ export class StylePanel {
     this._refreshers.push(headingSizeRow.refresh);
 
     const bodySizeRow = buildSliderRow(
-      "Body Size",
+      t("style.bodySizeLabel"),
       FONT_SCALE_MIN,
       FONT_SCALE_MAX,
       0.05,
@@ -672,7 +685,7 @@ export class StylePanel {
 
     const layoutHeader = document.createElement("div");
     layoutHeader.className = "section-header";
-    layoutHeader.textContent = "Layout";
+    layoutHeader.textContent = t("style.layoutHeader");
     panel.appendChild(layoutHeader);
 
     if (allowCustomLayout) {
@@ -683,8 +696,8 @@ export class StylePanel {
       // never populate style.customLayout, since this is the only other
       // control that could ever offer that.
       const layoutRow = buildSelectRow(
-        "Layout Style",
-        LAYOUT_LABELS,
+        t("style.layoutStyleLabel"),
+        layoutLabels(),
         () => this.getStyle().layoutVariant,
         (value) => {
           const style = this.getStyle();
@@ -697,8 +710,8 @@ export class StylePanel {
     }
 
     const cornerRow = buildSelectRow(
-      "Card Corners",
-      CORNER_LABELS,
+      t("style.cardCornersLabel"),
+      cornerLabels(),
       () => this.getStyle().cornerStyle,
       (value) => {
         const style = this.getStyle();
@@ -710,8 +723,8 @@ export class StylePanel {
     this._refreshers.push(cornerRow.refresh);
 
     const bgModeRow = buildSelectRow(
-      "Background",
-      BG_MODE_LABELS,
+      t("style.backgroundLabel"),
+      bgModeLabels(),
       () => this.getStyle().backgroundMode,
       (value) => {
         const style = this.getStyle();
@@ -723,8 +736,8 @@ export class StylePanel {
     this._refreshers.push(bgModeRow.refresh);
 
     const bgAnimRow = buildSelectRow(
-      "Background Motion",
-      BACKGROUND_ANIM_LABELS,
+      t("style.backgroundMotionLabel"),
+      backgroundAnimLabels(),
       () => this.getStyle().backgroundAnim || "none",
       (value) => {
         const style = this.getStyle();
@@ -737,18 +750,17 @@ export class StylePanel {
 
     const bgAnimHint = document.createElement("div");
     bgAnimHint.className = "field-hint";
-    bgAnimHint.textContent =
-      "Adds a subtle animated backdrop that shows in the live preview and every export, including the animated GIF.";
+    bgAnimHint.textContent = t("style.bgAnimHint");
     panel.appendChild(bgAnimHint);
 
     const imagesHeader = document.createElement("div");
     imagesHeader.className = "section-header";
-    imagesHeader.textContent = "Custom Images";
+    imagesHeader.textContent = t("common.customImagesHeader");
     panel.appendChild(imagesHeader);
 
     const imagesHint = document.createElement("div");
     imagesHint.className = "field-hint";
-    imagesHint.textContent = "Upload images/GIFs in the Assets tab, then fine-tune each one here.";
+    imagesHint.textContent = t("style.customImagesHint");
     panel.appendChild(imagesHint);
 
     const imagesContainer = document.createElement("div");
@@ -760,7 +772,7 @@ export class StylePanel {
       if (images.length === 0) {
         const empty = document.createElement("div");
         empty.className = "field-hint";
-        empty.textContent = "No custom images uploaded yet.";
+        empty.textContent = t("style.noCustomImages");
         imagesContainer.appendChild(empty);
         return;
       }
