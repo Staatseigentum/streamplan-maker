@@ -521,13 +521,13 @@ export class TemplateStudio {
     }
   }
 
-  // Uploads the template straight to Streamplan Hub instead of saving it
-  // locally — same JSON payload as a local export, just POSTed to the site
-  // (see main process's hub:upload handler for why that runs there rather
-  // than as a renderer-side fetch). A name is required here even though
-  // local export happily falls back to "Custom Template": an unnamed
-  // upload would show up on the community site with nothing to identify
-  // it by.
+  // Prepares the template for Streamplan Hub and hands off to the site's
+  // own upload page, rather than publishing it directly from here — that
+  // way the user still gets a chance to add a preview image or tweak the
+  // name in the site's own form before it actually goes live. A name is
+  // required here even though local export happily falls back to "Custom
+  // Template": an unnamed upload would show up on the community site with
+  // nothing to identify it by.
   async _uploadToHub() {
     const name = this.nameInput.value.trim();
     if (!name) {
@@ -539,16 +539,15 @@ export class TemplateStudio {
     this._exportMenuBtn.textContent = t("common.uploadingEllipsis");
     try {
       const payload = { name, style: styleToDict(this._draftStyle) };
-      const jsonBytes = new TextEncoder().encode(JSON.stringify(payload, null, 2));
-      const result = await window.streamplanAPI.uploadToHub({ type: "template", name, extension: TEMPLATE_FILE_EXTENSION, jsonBytes });
-      if (result.ok) {
-        await window.streamplanAPI.showMessage("info", t("common.uploadSuccessTitle"), t("common.uploadSuccessBody", { url: result.url }));
-      } else {
-        await window.streamplanAPI.showMessage("error", t("common.uploadFailedTitle"), t("common.uploadNetworkErrorBody"));
-      }
+      const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2));
+      const filename = `${sanitizeFilename(name)}${TEMPLATE_FILE_EXTENSION}`;
+      const filePath = await window.streamplanAPI.writeTempFile(filename, bytes);
+      await window.streamplanAPI.showItemInFolder(filePath);
+      await window.streamplanAPI.showMessage("info", t("common.uploadReadyTitle"), t("common.uploadReadyBody", { filename }));
+      await window.streamplanAPI.openExternal(`https://streamplan-maker.online/upload?type=template&name=${encodeURIComponent(name)}`);
     } catch (err) {
       console.error(err);
-      await window.streamplanAPI.showMessage("error", t("common.uploadFailedTitle"), t("common.uploadNetworkErrorBody"));
+      await window.streamplanAPI.showMessage("error", t("common.uploadFailedTitle"), err.message);
     } finally {
       this._exportMenuBtn.disabled = false;
       this._exportMenuBtn.textContent = prevText;

@@ -2,6 +2,11 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.14] - 2026-07-23
+
+### Changed
+- "Upload to Streamplan Hub" (added in 1.0.13) no longer publishes straight from the app. It now prepares the file, highlights it in File Explorer, and opens Streamplan Hub's own upload page with the name already filled in — so there's still a chance to add a preview image or adjust the name before it actually goes live.
+
 ## [1.0.13] - 2026-07-23
 
 ### Added

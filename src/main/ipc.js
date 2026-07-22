@@ -152,31 +152,12 @@ function registerIpcHandlers() {
     return shell.openExternal(url);
   });
 
-  // Uploads a Template/Layout export straight to Streamplan Hub instead of
-  // saving it locally. Runs here (not the renderer) so the request is a
-  // plain Node fetch — a renderer-side fetch to a cross-origin https: URL
-  // would hit the browser's CORS policy and have its response blocked,
-  // since the site's /upload route (a normal server-rendered form target,
-  // not a CORS-enabled API) sends no Access-Control-Allow-Origin header.
-  // Mirrors the site's own upload form field-for-field; author_name/
-  // description are left blank (server defaults author to "Anonym").
-  ipcMain.handle("hub:upload", async (_event, { type, name, extension, jsonBytes }) => {
-    const form = new FormData();
-    form.append("type", type);
-    form.append("name", name);
-    form.append("file", new Blob([jsonBytes], { type: "application/json" }), `upload${extension}`);
-
-    let response;
-    try {
-      response = await fetch("https://streamplan-maker.online/upload", { method: "POST", body: form });
-    } catch (err) {
-      return { ok: false, error: err.message };
-    }
-    if (!response.ok) {
-      return { ok: false, status: response.status };
-    }
-    const match = response.url.match(/\/item\/([^/?]+)/);
-    return { ok: true, url: match ? `https://streamplan-maker.online/item/${match[1]}` : response.url };
+  // Reveals an exported Template/Layout file in Explorer, selected — used
+  // right before opening Streamplan Hub's upload page, so the user can just
+  // drag the already-highlighted file into the site's drop zone instead of
+  // hunting for it in a file picker.
+  ipcMain.handle("app:show-item-in-folder", (_event, filePath) => {
+    shell.showItemInFolder(filePath);
   });
 }
 
