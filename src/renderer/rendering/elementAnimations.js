@@ -64,6 +64,12 @@ export function drawElementGlow(ctx, t, el, rect, style) {
   const [x0, y0, x1, y1] = rect;
 
   ctx.save();
+  // Reset offset explicitly: an element can carry BOTH this glow ring and a
+  // Template Studio drop shadow (applyElementShadow, renderer.js) at once —
+  // without this, the ring would inherit that shadow's offsetX/Y and drift
+  // off-center instead of staying centered on the element.
+  ctx.shadowOffsetX = 0;
+  ctx.shadowOffsetY = 0;
   ctx.shadowColor = hexToRgba(glowColor, alpha);
   ctx.shadowBlur = 28 * k;
   ctx.strokeStyle = hexToRgba(glowColor, alpha);

@@ -33,7 +33,7 @@ export const ELEMENT_ANIM_STYLES = ["none", "pulse", "drift", "bob", "glow", "sp
 export const ELEMENT_ANIM_INTENSITIES = ["low", "med", "high"];
 
 export const TEXT_ELEMENT_ALIGNS = ["left", "center", "right"];
-export const SHAPE_KINDS = ["rect", "ellipse", "line"];
+export const SHAPE_KINDS = ["rect", "ellipse", "line", "triangle", "diamond", "pentagon", "hexagon", "star", "arrow"];
 
 // Fixed set of ids every custom layout must contain. Draw/stacking order is
 // NOT tied to this list — it's whatever order the elements array itself is
@@ -65,6 +65,14 @@ export const CUSTOM_LAYOUT_ELEMENT_IDS = [...DAY_NAMES, "header", "logo"];
 //   shapeKind/fillColor/strokeColor/strokeWidth: shape only.
 //   imagePath: image only — trusted like every other asset path in the app
 //     (background/logo/sticker), not existence-checked at sanitize time.
+//   shadowColor: all types — null = no drop shadow. Deliberately a separate
+//     concept from animStyle:"glow" (a pulsing accent-colored ring drawn
+//     AFTER the element): this is a static, always-on drop shadow applied
+//     via the canvas's native ctx.shadow* properties BEFORE the element
+//     draws, so it falls behind every part of it (panel, stripe, text…)
+//     the way a design tool's shadow would, and composes fine with glow.
+//   shadowBlur/shadowOffsetX/shadowOffsetY/shadowOpacity: all types — only
+//     meaningful once shadowColor is set.
 export function createLayoutElement({
   id,
   type,
@@ -91,6 +99,11 @@ export function createLayoutElement({
   strokeColor = null,
   strokeWidth = 0,
   imagePath = null,
+  shadowColor = null,
+  shadowBlur = 16,
+  shadowOffsetX = 0,
+  shadowOffsetY = 8,
+  shadowOpacity = 0.6,
 }) {
   return {
     id,
@@ -118,6 +131,11 @@ export function createLayoutElement({
     strokeColor,
     strokeWidth,
     imagePath,
+    shadowColor,
+    shadowBlur,
+    shadowOffsetX,
+    shadowOffsetY,
+    shadowOpacity,
   };
 }
 
@@ -211,6 +229,11 @@ function sanitizeSharedFields(raw, fallback) {
     fontSize: raw.fontSize == null ? null : clampNum(raw.fontSize, 0.01, 0.3, null),
     animStyle: ELEMENT_ANIM_STYLES.includes(raw.animStyle) ? raw.animStyle : null,
     animIntensity: ELEMENT_ANIM_INTENSITIES.includes(raw.animIntensity) ? raw.animIntensity : "med",
+    shadowColor: sanitizeHexColor(raw.shadowColor),
+    shadowBlur: clampNum(raw.shadowBlur, 0, 60, 16),
+    shadowOffsetX: clampNum(raw.shadowOffsetX, -60, 60, 0),
+    shadowOffsetY: clampNum(raw.shadowOffsetY, -60, 60, 8),
+    shadowOpacity: clampNum(raw.shadowOpacity, 0.05, 1, 0.6),
   };
 }
 

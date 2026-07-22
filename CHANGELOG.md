@@ -2,6 +2,18 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.6] - 2026-07-22
+
+### Added
+- Template Studio: a new full-screen editor for Custom Templates that unifies style editing (colors, fonts, background, images) and live element editing (drag/resize/rotate, add text/shapes/images) into one place, opened from the Templates tab's "Open Template Studio" button.
+- Advanced multi-stop gradient editor for backgrounds, with adjustable angle — an alternative to the simple two-color fade.
+- Procedural background textures (Grain, Dots, Diagonal Lines, Grid), layered on top of any background.
+- Per-element drop shadows (color, blur, offset, opacity), available on every element type and stackable with the existing pulsing "Glow" animation.
+- The Layout Editor's "+ Shape" button now opens a picker with 6 new shapes (Triangle, Diamond, Pentagon, Hexagon, Star, Arrow) alongside the existing Rectangle, Ellipse, and Line, instead of always adding a rectangle first.
+
+### Fixed
+- The Layout Editor's "Use Template Font" reset button (for a selected element's font override) crashed instead of resetting the font.
+
 ## [1.0.5] - 2026-07-22
 
 ### Added

@@ -11,6 +11,7 @@ import { PROJECT_FILE_EXTENSION, DEFAULT_DISPLAY_MODE, DEFAULT_PREVIEW_FPS } fro
 import { DEFAULT_APP_THEME_ID, applyAppTheme } from "./ui/appThemes.js";
 import { SoftwareSettings } from "./ui/softwareSettings.js";
 import { LayoutEditor } from "./ui/layoutEditor.js";
+import { TemplateStudio } from "./ui/templateStudio.js";
 import { UpdateNotice } from "./ui/updateNotice.js";
 import { DEFAULT_LANGUAGE, setLanguage, t } from "./i18n/index.js";
 
@@ -105,6 +106,15 @@ const layoutEditor = new LayoutEditor(document.getElementById("layoutEditorOverl
 document.getElementById("layoutEditorBtn").addEventListener("click", () => layoutEditor.openStandalone(() => stylePanel.refreshAll()));
 document.getElementById("layoutImportBtn").addEventListener("click", () => layoutEditor.importAndOpen(() => stylePanel.refreshAll()));
 
+const templateStudio = new TemplateStudio(document.getElementById("templateStudioOverlay"), {
+  onApplyToProject: (newStyle) => {
+    document_.style = newStyle;
+    touch(document_);
+    refreshPreview(true);
+    scheduleAutosave();
+  },
+});
+
 const stylePanelEl = document.getElementById("stylePanel");
 const stylePanel = new StylePanel(stylePanelEl, {
   getStyle: () => document_.style,
@@ -119,7 +129,7 @@ const stylePanel = new StylePanel(stylePanelEl, {
     refreshPreview(true);
     scheduleAutosave();
   },
-  openLayoutEditor: (opts) => layoutEditor.open(opts),
+  openTemplateStudio: (opts) => templateStudio.open({ ...opts, onClose: () => stylePanel.refreshAll() }),
 });
 
 buildExportBar(document.getElementById("exportBar"), setStatus, {
@@ -292,6 +302,6 @@ refreshPreview();
 })();
 
 window.__streamplanDoc = document_;
-window.__streamplanPanels = { schedulePanel, stylePanel, previewCanvas, layoutEditor };
+window.__streamplanPanels = { schedulePanel, stylePanel, previewCanvas, layoutEditor, templateStudio };
 window.__streamplanProject = { newProject, saveProject, openProject };
 window.__streamplanSettings = { softwareSettings, updateNotice, getAppTheme: () => currentAppTheme };

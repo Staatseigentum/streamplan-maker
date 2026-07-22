@@ -28,6 +28,7 @@ export const LAYOUT_VARIANTS = [
 ];
 export const BACKGROUND_MODES = ["solid", "gradient", "image"];
 export const CORNER_STYLES = ["sharp", "rounded"];
+export const BACKGROUND_TEXTURES = ["none", "grain", "dots", "diagonal", "grid"];
 
 export const FONT_SCALE_MIN = 0.7;
 export const FONT_SCALE_MAX = 1.6;
@@ -63,6 +64,10 @@ export function createStyleConfig({
   logoOffsetX = 0.5,
   logoOffsetY = 0.5,
   logoScale = 1,
+  backgroundGradientStops = null,
+  backgroundGradientAngle = 180,
+  backgroundTexture = "none",
+  backgroundTextureOpacity = 0.15,
 } = {}) {
   return {
     templateId,
@@ -89,6 +94,20 @@ export function createStyleConfig({
     logoOffsetX,
     logoOffsetY,
     logoScale,
+    // null = legacy 2-stop gradient straight from colors.background/
+    // colors.backgroundEnd (byte-identical to every template saved before
+    // this field existed); once set (via the Template Studio's gradient
+    // editor) it's an ordered [{offset, color}] list that fully replaces
+    // that 2-stop behavior, and backgroundGradientAngle (degrees, 0 = left-
+    // to-right, 90 = top-to-bottom, matching the old vertical default at
+    // 180 reversed... see rendering/layout.js's buildBackground for the
+    // exact angle-to-coordinate math) controls its direction.
+    backgroundGradientStops: backgroundGradientStops ? backgroundGradientStops.map((s) => ({ ...s })) : null,
+    backgroundGradientAngle,
+    // Procedural, asset-free overlay drawn on top of the background fill —
+    // see rendering/layout.js's drawBackgroundTexture.
+    backgroundTexture: BACKGROUND_TEXTURES.includes(backgroundTexture) ? backgroundTexture : "none",
+    backgroundTextureOpacity,
   };
 }
 
@@ -126,12 +145,32 @@ export function styleToDict(style) {
     logo_offset_x: style.logoOffsetX,
     logo_offset_y: style.logoOffsetY,
     logo_scale: style.logoScale,
+    background_gradient_stops: style.backgroundGradientStops ? style.backgroundGradientStops.map((s) => ({ ...s })) : null,
+    background_gradient_angle: style.backgroundGradientAngle,
+    background_texture: style.backgroundTexture || "none",
+    background_texture_opacity: style.backgroundTextureOpacity,
   };
 }
 
 function clampFraction(value, min, max, fallback) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : fallback;
+}
+
+const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
+
+// Untrusted-data repair for a gradient stops list (autosave restore,
+// .sptemplate import) — drops malformed entries rather than crashing the
+// renderer, mirroring customLayout.js's sanitizeCustomLayout approach.
+// Needs at least 2 valid stops to be usable; anything less falls back to
+// null (the legacy 2-stop colors.background/backgroundEnd gradient).
+function sanitizeGradientStops(raw) {
+  if (!Array.isArray(raw)) return null;
+  const stops = raw
+    .filter((s) => s && typeof s === "object" && HEX_COLOR_RE.test(s.color))
+    .map((s) => ({ offset: clampFraction(s.offset, 0, 1, 0), color: s.color }))
+    .sort((a, b) => a.offset - b.offset);
+  return stops.length >= 2 ? stops : null;
 }
 
 export function styleFromDict(data) {
@@ -157,5 +196,9 @@ export function styleFromDict(data) {
     logoOffsetX: clampFraction(data.logo_offset_x, 0, 1, 0.5),
     logoOffsetY: clampFraction(data.logo_offset_y, 0, 1, 0.5),
     logoScale: clampFraction(data.logo_scale, 1, 4, 1),
+    backgroundGradientStops: sanitizeGradientStops(data.background_gradient_stops),
+    backgroundGradientAngle: clampFraction(data.background_gradient_angle, 0, 360, 180),
+    backgroundTexture: BACKGROUND_TEXTURES.includes(data.background_texture) ? data.background_texture : "none",
+    backgroundTextureOpacity: clampFraction(data.background_texture_opacity, 0.02, 0.6, 0.15),
   });
 }

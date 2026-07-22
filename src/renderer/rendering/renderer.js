@@ -563,42 +563,119 @@ function drawTextElement(ctx, rect, el, style) {
   });
 }
 
+// Vertex generators for the polygon-based shape kinds, all working in the
+// element's own rect (x0,y0,x1,y1) so they inherit non-uniform aspect ratios
+// (a wide/short rect) the same way the existing ellipse already does via its
+// independent rx/ry radii, instead of forcing a regular/undistorted shape.
+function regularPolygonPoints(cx, cy, rx, ry, sides) {
+  const points = [];
+  for (let i = 0; i < sides; i++) {
+    const angle = -Math.PI / 2 + (i * 2 * Math.PI) / sides;
+    points.push([cx + rx * Math.cos(angle), cy + ry * Math.sin(angle)]);
+  }
+  return points;
+}
+
+function starPoints(cx, cy, rx, ry, spikes, innerRatio) {
+  const points = [];
+  for (let i = 0; i < spikes * 2; i++) {
+    const angle = -Math.PI / 2 + (i * Math.PI) / spikes;
+    const r = i % 2 === 0 ? 1 : innerRatio;
+    points.push([cx + rx * r * Math.cos(angle), cy + ry * r * Math.sin(angle)]);
+  }
+  return points;
+}
+
+function trianglePoints(x0, y0, x1, y1) {
+  return [
+    [(x0 + x1) / 2, y0],
+    [x1, y1],
+    [x0, y1],
+  ];
+}
+
+function diamondPoints(x0, y0, x1, y1) {
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  return [
+    [cx, y0],
+    [x1, cy],
+    [cx, y1],
+    [x0, cy],
+  ];
+}
+
+function arrowPoints(x0, y0, x1, y1) {
+  const w = x1 - x0;
+  const h = y1 - y0;
+  const midY = (y0 + y1) / 2;
+  const shaftEnd = x0 + w * 0.6;
+  return [
+    [x0, midY - h * 0.2],
+    [shaftEnd, midY - h * 0.2],
+    [shaftEnd, midY - h * 0.5],
+    [x1, midY],
+    [shaftEnd, midY + h * 0.5],
+    [shaftEnd, midY + h * 0.2],
+    [x0, midY + h * 0.2],
+  ];
+}
+
+function polygonPath(ctx, points) {
+  ctx.beginPath();
+  points.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+  ctx.closePath();
+}
+
 function drawShapeElement(ctx, rect, el) {
   const [x0, y0, x1, y1] = rect;
   const fill = el.fillColor;
   const stroke = el.strokeColor;
   const strokeWidth = el.strokeWidth || 0;
+  const kind = el.shapeKind;
 
-  if (el.shapeKind === "ellipse") {
-    ctx.beginPath();
-    ctx.ellipse((x0 + x1) / 2, (y0 + y1) / 2, Math.max(0, (x1 - x0) / 2), Math.max(0, (y1 - y0) / 2), 0, 0, Math.PI * 2);
-    if (fill) {
-      ctx.fillStyle = fill;
-      ctx.fill();
-    }
-    if (stroke && strokeWidth > 0) {
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = strokeWidth;
-      ctx.stroke();
-    }
-  } else if (el.shapeKind === "line") {
+  if (kind === "line") {
     ctx.beginPath();
     ctx.moveTo(x0, (y0 + y1) / 2);
     ctx.lineTo(x1, (y0 + y1) / 2);
     ctx.strokeStyle = stroke || fill || "#FFFFFF";
     ctx.lineWidth = strokeWidth > 0 ? strokeWidth : 4;
     ctx.stroke();
+    return;
+  }
+
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  const rx = Math.max(0, (x1 - x0) / 2);
+  const ry = Math.max(0, (y1 - y0) / 2);
+
+  if (kind === "ellipse") {
+    ctx.beginPath();
+    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  } else if (kind === "triangle") {
+    polygonPath(ctx, trianglePoints(x0, y0, x1, y1));
+  } else if (kind === "diamond") {
+    polygonPath(ctx, diamondPoints(x0, y0, x1, y1));
+  } else if (kind === "pentagon") {
+    polygonPath(ctx, regularPolygonPoints(cx, cy, rx, ry, 5));
+  } else if (kind === "hexagon") {
+    polygonPath(ctx, regularPolygonPoints(cx, cy, rx, ry, 6));
+  } else if (kind === "star") {
+    polygonPath(ctx, starPoints(cx, cy, rx, ry, 5, 0.5));
+  } else if (kind === "arrow") {
+    polygonPath(ctx, arrowPoints(x0, y0, x1, y1));
   } else {
     roundedRectPath(ctx, x0, y0, x1 - x0, y1 - y0, layout.cornerRadius(el.cornerStyle, 12));
-    if (fill) {
-      ctx.fillStyle = fill;
-      ctx.fill();
-    }
-    if (stroke && strokeWidth > 0) {
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = strokeWidth;
-      ctx.stroke();
-    }
+  }
+
+  if (fill) {
+    ctx.fillStyle = fill;
+    ctx.fill();
+  }
+  if (stroke && strokeWidth > 0) {
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = strokeWidth;
+    ctx.stroke();
   }
 }
 
@@ -617,6 +694,21 @@ function drawImageElement(ctx, rect, el, elapsedSeconds) {
   }
   if (!source) return;
   drawImageCover(ctx, source, x0, y0, x1 - x0, y1 - y0);
+}
+
+// A static drop shadow (Template Studio's per-element "Shadow" section) —
+// distinct from animStyle:"glow"'s pulsing accent ring (drawElementGlow,
+// drawn AFTER the element). Setting the canvas's native shadow properties
+// here, before the element's own type-dispatch draw call below, makes every
+// fill/stroke that draw call performs (panel, stripe, text…) cast the same
+// shadow, the way a design tool's shadow would. A no-op when shadowColor is
+// unset, so every element saved before this feature existed is unaffected.
+function applyElementShadow(ctx, el) {
+  if (!el.shadowColor) return;
+  ctx.shadowColor = hexToRgba(el.shadowColor, el.shadowOpacity ?? 0.6);
+  ctx.shadowBlur = el.shadowBlur ?? 16;
+  ctx.shadowOffsetX = el.shadowOffsetX ?? 0;
+  ctx.shadowOffsetY = el.shadowOffsetY ?? 8;
 }
 
 function drawCustomLayout(ctx, activeDays, profile, style, size, highlightRects, t, elapsedSeconds) {
@@ -661,6 +753,7 @@ function drawCustomLayout(ctx, activeDays, profile, style, size, highlightRects,
       ctx.translate(-cx, -cy);
     }
     applyElementAnimation(ctx, t, el);
+    applyElementShadow(ctx, el);
 
     if (el.type === "dayCard") {
       const entry = activeByDay.get(el.id) || { day: el.id, startTime: "Day Off", endTime: null, durationMinutes: null, label: null };

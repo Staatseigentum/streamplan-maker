@@ -1,12 +1,15 @@
-// The Layout Editor: a full-viewport free-form drag/resize/rotate editor for
-// the 9 elements (7 day cards + header + logo) a Custom Template's
-// style.customLayout can describe. Opens either standalone (library
-// management only) or pre-loaded from a Custom Template's current layout via
-// stylePanel.js, which also supplies an onApply callback to write the draft
-// back. The draft is a deep-cloned working copy at all times — nothing here
-// ever touches the live document style until "Apply to this Template" (or a
-// library Save/Export) is explicitly clicked.
-import { CANVAS_WIDTH, CANVAS_HEIGHT, DAY_NAMES, DAY_LABELS_SHORT, LAYOUT_FILE_EXTENSION } from "../../shared/constants.js";
+// The Template Studio: a full-viewport editor that unifies what used to be
+// split across two places — the sidebar's "Template Customize" tab (global
+// style: colors, fonts, background, images) and the standalone Layout
+// Editor (drag/resize/rotate the 9+ canvas elements) — into ONE overlay with
+// a live canvas in the middle and two sidebar tabs ("Style" for the global
+// template, "Element" for whatever's selected on the canvas). Also home to
+// design tools that don't exist anywhere else: a multi-stop gradient editor,
+// procedural background textures, and per-element drop shadows.
+// The draft is a deep-cloned working copy at all times — nothing here ever
+// touches the live document style until "Apply to Project" (or a library
+// Save/Export) is explicitly clicked.
+import { CANVAS_WIDTH, CANVAS_HEIGHT, DAY_NAMES, DAY_LABELS_SHORT, TEMPLATE_FILE_EXTENSION } from "../../shared/constants.js";
 import { createStreamerProfile, createDayEntry } from "../models/schedule.js";
 import { renderStreamplan } from "../rendering/renderer.js";
 import {
@@ -20,13 +23,20 @@ import {
   ELEMENT_ANIM_INTENSITIES,
   SHAPE_KINDS,
 } from "../models/customLayout.js";
+import { COLOR_KEYS, FONT_SCALE_MIN, FONT_SCALE_MAX, BACKGROUND_TEXTURES, cloneStyle, styleToDict, styleFromDict } from "../models/style.js";
+import { customBaseStyle } from "../models/templates.js";
+import { addCustomTemplate, updateCustomTemplate, removeCustomTemplate, getCustomTemplate, isCustomTemplateId } from "../models/customTemplateLibrary.js";
+import { listCustomLayouts, getCustomLayout } from "../models/customLayoutLibrary.js";
 import {
-  listCustomLayouts,
-  getCustomLayout,
-  addCustomLayout,
-  updateCustomLayout,
-  removeCustomLayout,
-} from "../models/customLayoutLibrary.js";
+  cornerLabels,
+  bgModeLabels,
+  backgroundAnimLabels,
+  buildSelectRow,
+  buildFontSelectRow,
+  buildColorRow,
+  buildCustomImageEditor,
+} from "./stylePanel.js";
+import { buildSliderRow } from "./formControls.js";
 import { addCustomFontToLibrary, listCustomFonts } from "../rendering/fontLibrary.js";
 import { t } from "../i18n/index.js";
 
@@ -69,9 +79,6 @@ function shapeKindLabels() {
     arrow: t("layoutEditor.shapeArrowOpt"),
   };
 }
-// Purely decorative glyphs for the toolbar's shape-picker menu — not
-// translated (they're symbols, not text) and not used in the property
-// panel's plain <select>, which stays label-only like every other dropdown.
 const SHAPE_KIND_ICONS = {
   rect: "▭",
   ellipse: "◯",
@@ -83,11 +90,20 @@ const SHAPE_KIND_ICONS = {
   star: "★",
   arrow: "➜",
 };
+function backgroundTextureLabels() {
+  return {
+    none: t("templateStudio.textureNone"),
+    grain: t("templateStudio.textureGrain"),
+    dots: t("templateStudio.textureDots"),
+    diagonal: t("templateStudio.textureDiagonal"),
+    grid: t("templateStudio.textureGrid"),
+  };
+}
 const ANIM_TICK_MS = 1000 / 30;
 
 // All 7 days populated (unlike the 3-day gallery-thumbnail sample) so every
-// day card is always visible/draggable while editing, regardless of what the
-// user's real schedule currently contains.
+// day card is always visible/draggable while editing, mirroring the Layout
+// Editor's own sample profile.
 const SAMPLE_PROFILE = createStreamerProfile({
   displayName: "YourName",
   days: DAY_NAMES.map((day, i) =>
@@ -111,32 +127,25 @@ function elementLabel(el) {
 
 function sanitizeFilename(name) {
   const cleaned = (name || "").trim().replace(/[\\/:*?"<>|]+/g, "").replace(/\s+/g, "_");
-  return cleaned || "custom_layout";
+  return cleaned || "custom_template";
 }
 
-// Rotates the point (x, y) by angleDeg using the same clockwise-for-positive
-// convention as Canvas2D's ctx.rotate() and CSS's transform: rotate() (both
-// operate in a y-down coordinate space), so this stays consistent with how
-// rendering/renderer.js visually rotates elements around their own center.
+// Same rotation/point math as layoutEditor.js — kept in sync deliberately;
+// see that file's comments for why this convention matches Canvas2D/CSS.
 function rotatePoint(x, y, angleDeg) {
   const rad = (angleDeg * Math.PI) / 180;
   const c = Math.cos(rad);
   const s = Math.sin(rad);
   return { x: x * c - y * s, y: x * s + y * c };
 }
-
 function toCanvasPoint(localX, localY, cx, cy, rotationDeg) {
   const p = rotatePoint(localX, localY, rotationDeg);
   return { x: cx + p.x, y: cy + p.y };
 }
-
 function toLocalPoint(px, py, cx, cy, rotationDeg) {
   return rotatePoint(px - cx, py - cy, -rotationDeg);
 }
 
-// Snaps a box's center along one axis to the canvas center (50%) or to
-// either canvas edge (accounting for the box's own half-size, so the box's
-// EDGE lands on the canvas edge rather than just its center at 0%/100%).
 const SNAP_THRESHOLD = 0.012;
 function snapAxis(center, halfSize) {
   for (const candidate of [0.5, halfSize, 1 - halfSize]) {
@@ -147,16 +156,36 @@ function snapAxis(center, halfSize) {
 
 const CORNER_SIGNS = { nw: [-1, -1], ne: [1, -1], sw: [-1, 1], se: [1, 1] };
 
-export class LayoutEditor {
-  constructor(overlayEl, { getBaseStyle }) {
+const GRADIENT_STOP_COLORS = ["#7B5FD9", "#4FFFD1", "#FF5C8A", "#FFD24C"];
+
+export class TemplateStudio {
+  constructor(overlayEl, { onApplyToProject }) {
     this.overlayEl = overlayEl;
-    this.getBaseStyle = getBaseStyle;
-    this._draftElements = buildDefaultCustomLayoutElements();
-    this._onApply = null;
-    this._selectedId = null;
+    this.onApplyToProject = onApplyToProject || null;
+    // A real (not null) placeholder before the first open() — _build() runs
+    // synchronously below and several row-builders (e.g. stylePanel.js's
+    // buildColorRow) read the current style immediately to set their
+    // initial displayed value, not just lazily on change.
+    this._draftStyle = customBaseStyle();
+    this._draftStyle.customLayout = { elements: buildDefaultCustomLayoutElements() };
+    this._onClose = null;
     this._loadedLibraryId = null;
+    this._selectedId = null;
     this._handleEls = new Map();
+    this._styleRefreshers = [];
     this._build();
+  }
+
+  // customLayout.elements is always present once open() has run (seeded if
+  // missing) — this getter lets every element-manipulation method below
+  // reference `this._draftElements` exactly like layoutEditor.js's methods
+  // do, without duplicating a separate array field to keep in sync.
+  get _draftElements() {
+    return this._draftStyle.customLayout.elements;
+  }
+
+  _isLocked() {
+    return !!(this._draftStyle && this._draftStyle.layoutLocked);
   }
 
   _build() {
@@ -170,28 +199,18 @@ export class LayoutEditor {
 
     const title = document.createElement("div");
     title.className = "layout-editor-title";
-    title.textContent = t("layoutEditor.title");
+    title.textContent = t("templateStudio.title");
     toolbar.appendChild(title);
-
-    const newBtn = document.createElement("button");
-    newBtn.textContent = t("common.new");
-    newBtn.addEventListener("click", () => {
-      this._draftElements = buildDefaultCustomLayoutElements();
-      this._loadedLibraryId = null;
-      this.nameInput.value = "";
-      this._selectElement(null);
-      this._refreshLoadSelect();
-      this._renderCanvas();
-      this._renderOverlay();
-    });
-    toolbar.appendChild(newBtn);
 
     const addTextBtn = document.createElement("button");
     addTextBtn.textContent = t("layoutEditor.addText");
     addTextBtn.addEventListener("click", () => this._addFreeformElement("text"));
+    this._lockableEls = [addTextBtn];
     toolbar.appendChild(addTextBtn);
 
-    toolbar.appendChild(this._buildShapeAddMenu());
+    const shapeMenu = this._buildShapeAddMenu();
+    this._lockableEls.push(shapeMenu.querySelector(".shape-add-menu-trigger"));
+    toolbar.appendChild(shapeMenu);
 
     const addImageBtn = document.createElement("button");
     addImageBtn.textContent = t("layoutEditor.addImage");
@@ -206,7 +225,16 @@ export class LayoutEditor {
       if (!path) return;
       this._addFreeformElement("image", { imagePath: path });
     });
+    this._lockableEls.push(addImageBtn);
     toolbar.appendChild(addImageBtn);
+
+    this.lockBadge = document.createElement("div");
+    this.lockBadge.className = "field-warning";
+    this.lockBadge.style.display = "none";
+    this.lockBadge.style.margin = "0";
+    this.lockBadge.style.padding = "6px 10px";
+    this.lockBadge.innerHTML = `<span class="field-warning-icon">🔒</span><span>${t("templateStudio.lockedBadge")}</span>`;
+    toolbar.appendChild(this.lockBadge);
 
     const spacer = document.createElement("div");
     spacer.className = "layout-editor-toolbar-spacer";
@@ -214,9 +242,9 @@ export class LayoutEditor {
 
     this.applyBtn = document.createElement("button");
     this.applyBtn.className = "primary";
-    this.applyBtn.textContent = t("layoutEditor.applyBtn");
+    this.applyBtn.textContent = t("templateStudio.applyBtn");
     this.applyBtn.addEventListener("click", () => {
-      if (this._onApply) this._onApply(this._draftElements.map((el) => ({ ...el })));
+      if (this.onApplyToProject) this.onApplyToProject(cloneStyle(this._draftStyle));
       this.close();
     });
     toolbar.appendChild(this.applyBtn);
@@ -226,61 +254,46 @@ export class LayoutEditor {
     closeBtn.addEventListener("click", () => this.close());
     toolbar.appendChild(closeBtn);
 
-    // -- Library row (save/export/import a reusable layout) -----------
+    // -- Library row (save/export/import/delete this template) --------
     const libraryRow = document.createElement("div");
     libraryRow.className = "layout-editor-library-row";
 
-    this.loadSelect = document.createElement("select");
-    this.loadSelect.title = t("layoutEditor.loadSelectTitle");
-    this.loadSelect.addEventListener("change", () => {
-      const id = this.loadSelect.value;
-      if (!id) return;
-      const entry = getCustomLayout(id);
-      if (!entry) return;
-      this._loadedLibraryId = id;
-      this._draftElements = entry.elements.map((el) => ({ ...el }));
-      this.nameInput.value = entry.name;
-      this._selectElement(null);
-      this._refreshLoadSelect();
-      this._renderCanvas();
-      this._renderOverlay();
-    });
-    libraryRow.appendChild(this.loadSelect);
-
     this.nameInput = document.createElement("input");
     this.nameInput.type = "text";
-    this.nameInput.placeholder = t("layoutEditor.namePlaceholder");
+    this.nameInput.placeholder = t("style.templateNamePlaceholder");
     libraryRow.appendChild(this.nameInput);
 
     const saveBtn = document.createElement("button");
     saveBtn.textContent = t("common.saveToLibrary");
     saveBtn.addEventListener("click", () => {
-      const name = this.nameInput.value.trim() || "Custom Layout";
-      if (this._loadedLibraryId && getCustomLayout(this._loadedLibraryId)) {
-        updateCustomLayout(this._loadedLibraryId, { name, elements: this._draftElements });
+      const style = this._draftStyle;
+      const name = this.nameInput.value.trim() || "Custom Template";
+      if (style.templateId && style.templateId !== "custom" && isCustomTemplateId(style.templateId)) {
+        updateCustomTemplate(style.templateId, { name, style });
       } else {
-        const entry = addCustomLayout({ name, elements: this._draftElements });
-        this._loadedLibraryId = entry.id;
+        const entry = addCustomTemplate({ name, style });
+        style.templateId = entry.id;
       }
-      this._refreshLoadSelect();
+      this._loadedLibraryId = style.templateId;
+      this._refreshLibraryState();
     });
     libraryRow.appendChild(saveBtn);
 
     const exportBtn = document.createElement("button");
     exportBtn.textContent = t("common.exportEllipsis");
     exportBtn.addEventListener("click", async () => {
-      const name = this.nameInput.value.trim() || "Custom Layout";
-      const defaultName = `${sanitizeFilename(name)}${LAYOUT_FILE_EXTENSION}`;
+      const name = this.nameInput.value.trim() || "Custom Template";
+      const defaultName = `${sanitizeFilename(name)}${TEMPLATE_FILE_EXTENSION}`;
       let targetPath;
       try {
-        targetPath = await window.streamplanAPI.chooseSaveLayoutPath(defaultName);
+        targetPath = await window.streamplanAPI.chooseSaveTemplatePath(defaultName);
       } catch (err) {
         await window.streamplanAPI.showMessage("error", t("common.exportFailedTitle"), t("common.saveDialogError", { message: err.message }));
         return;
       }
       if (!targetPath) return;
       try {
-        const payload = { name, elements: this._draftElements.map((el) => ({ ...el })) };
+        const payload = { name, style: styleToDict(this._draftStyle) };
         const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2));
         await window.streamplanAPI.writeFile(targetPath, bytes);
       } catch (err) {
@@ -293,15 +306,29 @@ export class LayoutEditor {
     const importBtn = document.createElement("button");
     importBtn.textContent = t("common.importEllipsis");
     importBtn.addEventListener("click", async () => {
-      const entry = await this._importLayoutFromDialog();
-      if (!entry) return;
-      this._loadedLibraryId = entry.id;
-      this._draftElements = entry.elements.map((el) => ({ ...el }));
-      this.nameInput.value = entry.name;
-      this._selectElement(null);
-      this._refreshLoadSelect();
-      this._renderCanvas();
-      this._renderOverlay();
+      let targetPath;
+      try {
+        targetPath = await window.streamplanAPI.chooseOpenTemplatePath();
+      } catch (err) {
+        await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("common.fileDialogError", { message: err.message }));
+        return;
+      }
+      if (!targetPath) return;
+      try {
+        const bytes = await window.streamplanAPI.readFile(targetPath);
+        const parsed = JSON.parse(new TextDecoder().decode(bytes));
+        if (!parsed || !parsed.style) throw new Error(t("style.invalidTemplateFile"));
+        const importedStyle = styleFromDict(parsed.style);
+        // Same rule as the sidebar's own import flow: a file from outside
+        // this session always comes in locked, regardless of what it claims.
+        importedStyle.layoutLocked = true;
+        const entry = addCustomTemplate({ name: parsed.name || "Imported Template", style: importedStyle });
+        entry.style.templateId = entry.id;
+        this._loadStyle(cloneStyle(entry.style));
+      } catch (err) {
+        console.error(err);
+        await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("style.importTemplateFailed", { message: err.message }));
+      }
     });
     libraryRow.appendChild(importBtn);
 
@@ -310,11 +337,35 @@ export class LayoutEditor {
     this.deleteLibraryBtn.textContent = t("common.deleteFromLibrary");
     this.deleteLibraryBtn.addEventListener("click", () => {
       if (!this._loadedLibraryId) return;
-      removeCustomLayout(this._loadedLibraryId);
+      removeCustomTemplate(this._loadedLibraryId);
       this._loadedLibraryId = null;
-      this._refreshLoadSelect();
+      this._draftStyle.templateId = "custom";
+      this._refreshLibraryState();
     });
     libraryRow.appendChild(this.deleteLibraryBtn);
+
+    // Loads a reusable, elements-only Layout (saved via the standalone
+    // Layout Editor's own library — customLayoutLibrary.js, deliberately
+    // separate from this template's full style) into the current draft,
+    // replacing its elements while leaving colors/fonts/background alone. A
+    // one-shot action (not a persistent selection), so it resets to blank
+    // right after firing instead of trying to track "does the current
+    // element set match a saved layout" the way the old dropdown used to.
+    this.loadLayoutSelect = document.createElement("select");
+    this.loadLayoutSelect.title = t("templateStudio.loadLayoutTitle");
+    this.loadLayoutSelect.addEventListener("change", () => {
+      const id = this.loadLayoutSelect.value;
+      this.loadLayoutSelect.value = "";
+      if (!id || this._isLocked()) return;
+      const entry = getCustomLayout(id);
+      if (!entry) return;
+      this._draftStyle.customLayout.elements = sanitizeCustomLayout(entry.elements);
+      this._selectElement(null);
+      this._renderCanvas();
+      this._renderOverlay();
+    });
+    this._lockableEls.push(this.loadLayoutSelect);
+    libraryRow.appendChild(this.loadLayoutSelect);
 
     // -- Body: canvas + sidebar -----------------------------------------
     const body = document.createElement("div");
@@ -342,7 +393,7 @@ export class LayoutEditor {
 
     this.sidebarEl = document.createElement("div");
     this.sidebarEl.className = "side-scroll layout-editor-sidebar";
-    this._buildPropertyPanel(this.sidebarEl);
+    this._buildSidebar(this.sidebarEl);
 
     body.append(canvasArea, this.sidebarEl);
 
@@ -354,12 +405,8 @@ export class LayoutEditor {
     });
   }
 
-  // "+ Shape" toolbar control: rather than dropping a default rectangle
-  // immediately, this opens a small custom dropdown listing every
-  // SHAPE_KINDS option (with an icon), and only adds the freeform element
-  // once the user actually picks one — so a shape always starts out as the
-  // kind the user meant, instead of "add rect, then flip it to something
-  // else in the property panel".
+  // Same pattern as layoutEditor.js's "+ Shape" dropdown — a small custom
+  // menu so a shape is added as the kind the user actually picked.
   _buildShapeAddMenu() {
     const wrap = document.createElement("div");
     wrap.className = "shape-add-menu";
@@ -411,7 +458,397 @@ export class LayoutEditor {
     return wrap;
   }
 
-  _buildPropertyPanel(container) {
+  // Two mini-tabs sharing the sidebar: "Style" (the whole template's global
+  // look) and "Element" (whatever's selected on the canvas, or a hint when
+  // nothing is). Selecting/deselecting on the canvas auto-switches between
+  // them (see _selectElement) so the sidebar always shows what's relevant
+  // without the user having to manually flip tabs.
+  _buildSidebar(container) {
+    const miniTabs = document.createElement("div");
+    miniTabs.className = "mini-tabs";
+    container.appendChild(miniTabs);
+
+    const panelsWrap = document.createElement("div");
+    container.appendChild(panelsWrap);
+
+    const stylePanelEl = document.createElement("div");
+    stylePanelEl.className = "mini-tab-panel active";
+    const elementPanelEl = document.createElement("div");
+    elementPanelEl.className = "mini-tab-panel";
+    panelsWrap.append(stylePanelEl, elementPanelEl);
+
+    const styleBtn = document.createElement("button");
+    styleBtn.className = "mini-tab-btn active";
+    styleBtn.textContent = t("templateStudio.tabStyle");
+    const elementBtn = document.createElement("button");
+    elementBtn.className = "mini-tab-btn";
+    elementBtn.textContent = t("templateStudio.tabElement");
+    miniTabs.append(styleBtn, elementBtn);
+
+    this._sidebarTabBtns = { style: styleBtn, element: elementBtn };
+    this._sidebarTabPanels = { style: stylePanelEl, element: elementPanelEl };
+    styleBtn.addEventListener("click", () => this._activateSidebarTab("style"));
+    elementBtn.addEventListener("click", () => this._activateSidebarTab("element"));
+
+    this._buildStyleTab(stylePanelEl);
+    this._buildElementTab(elementPanelEl);
+  }
+
+  _activateSidebarTab(id) {
+    Object.entries(this._sidebarTabBtns).forEach(([tid, btn]) => btn.classList.toggle("active", tid === id));
+    Object.entries(this._sidebarTabPanels).forEach(([tid, panel]) => panel.classList.toggle("active", tid === id));
+  }
+
+  // -- Style tab: the whole template's global look ------------------------
+  // A near-direct port of stylePanel.js's _appendStyleControls, minus the
+  // Layout Style dropdown (superseded here by editing elements directly on
+  // the canvas), plus the two new sections this feature adds.
+  _buildStyleTab(panel) {
+    const getStyle = () => this._draftStyle;
+    const onStyleChange = () => this._renderCanvas();
+
+    const colorsHeader = document.createElement("div");
+    colorsHeader.className = "section-header";
+    colorsHeader.textContent = t("style.colorsHeader");
+    panel.appendChild(colorsHeader);
+
+    COLOR_KEYS.forEach((key) => {
+      const row = buildColorRow(key, getStyle, onStyleChange);
+      panel.appendChild(row.el);
+      this._styleRefreshers.push(row.refresh);
+    });
+
+    const uploadHint = document.createElement("div");
+    uploadHint.className = "field-hint";
+    uploadHint.textContent = t("templateStudio.uploadElsewhereHint");
+    panel.appendChild(uploadHint);
+
+    const fontsHeader = document.createElement("div");
+    fontsHeader.className = "section-header";
+    fontsHeader.textContent = t("style.fontsHeader");
+    panel.appendChild(fontsHeader);
+
+    const headingRow = buildFontSelectRow(
+      t("style.headingFontLabel"),
+      () => this._draftStyle.fontHeading,
+      (font) => {
+        this._draftStyle.fontHeading = font;
+        this._renderCanvas();
+      }
+    );
+    panel.appendChild(headingRow.el);
+    this._styleRefreshers.push(headingRow.refresh);
+
+    const bodyRow = buildFontSelectRow(
+      t("style.bodyFontLabel"),
+      () => this._draftStyle.fontBody,
+      (font) => {
+        this._draftStyle.fontBody = font;
+        this._renderCanvas();
+      }
+    );
+    panel.appendChild(bodyRow.el);
+    this._styleRefreshers.push(bodyRow.refresh);
+
+    const sizeHeader = document.createElement("div");
+    sizeHeader.className = "section-header";
+    sizeHeader.textContent = t("style.textSizeHeader");
+    panel.appendChild(sizeHeader);
+
+    const headingSizeRow = buildSliderRow(
+      t("style.headingSizeLabel"),
+      FONT_SCALE_MIN,
+      FONT_SCALE_MAX,
+      0.05,
+      () => this._draftStyle.headingScale,
+      (value) => {
+        this._draftStyle.headingScale = value;
+        this._renderCanvas();
+      }
+    );
+    panel.appendChild(headingSizeRow.el);
+    this._styleRefreshers.push(headingSizeRow.refresh);
+
+    const bodySizeRow = buildSliderRow(
+      t("style.bodySizeLabel"),
+      FONT_SCALE_MIN,
+      FONT_SCALE_MAX,
+      0.05,
+      () => this._draftStyle.bodyScale,
+      (value) => {
+        this._draftStyle.bodyScale = value;
+        this._renderCanvas();
+      }
+    );
+    panel.appendChild(bodySizeRow.el);
+    this._styleRefreshers.push(bodySizeRow.refresh);
+
+    const cornerRow = buildSelectRow(
+      t("style.cardCornersLabel"),
+      cornerLabels(),
+      () => this._draftStyle.cornerStyle,
+      (value) => {
+        this._draftStyle.cornerStyle = value;
+        this._renderCanvas();
+      }
+    );
+    panel.appendChild(cornerRow.el);
+    this._styleRefreshers.push(cornerRow.refresh);
+
+    const bgHeader = document.createElement("div");
+    bgHeader.className = "section-header";
+    bgHeader.textContent = t("style.backgroundLabel");
+    panel.appendChild(bgHeader);
+
+    const bgModeRow = buildSelectRow(
+      t("style.backgroundLabel"),
+      bgModeLabels(),
+      () => this._draftStyle.backgroundMode,
+      (value) => {
+        this._draftStyle.backgroundMode = value;
+        this._renderCanvas();
+        this._refreshGradientSection();
+      }
+    );
+    panel.appendChild(bgModeRow.el);
+    this._styleRefreshers.push(bgModeRow.refresh);
+
+    this._buildGradientSection(panel);
+
+    const bgAnimRow = buildSelectRow(
+      t("style.backgroundMotionLabel"),
+      backgroundAnimLabels(),
+      () => this._draftStyle.backgroundAnim || "none",
+      (value) => {
+        this._draftStyle.backgroundAnim = value;
+        this._renderCanvas();
+      }
+    );
+    panel.appendChild(bgAnimRow.el);
+    this._styleRefreshers.push(bgAnimRow.refresh);
+
+    const bgAnimHint = document.createElement("div");
+    bgAnimHint.className = "field-hint";
+    bgAnimHint.textContent = t("style.bgAnimHint");
+    panel.appendChild(bgAnimHint);
+
+    this._buildTextureSection(panel);
+
+    const imagesHeader = document.createElement("div");
+    imagesHeader.className = "section-header";
+    imagesHeader.textContent = t("common.customImagesHeader");
+    panel.appendChild(imagesHeader);
+
+    const imagesHint = document.createElement("div");
+    imagesHint.className = "field-hint";
+    imagesHint.textContent = t("style.customImagesHint");
+    panel.appendChild(imagesHint);
+
+    const imagesContainer = document.createElement("div");
+    panel.appendChild(imagesContainer);
+
+    const refreshImagesSection = () => {
+      imagesContainer.innerHTML = "";
+      const images = this._draftStyle.customImages || [];
+      if (images.length === 0) {
+        const empty = document.createElement("div");
+        empty.className = "field-hint";
+        empty.textContent = t("style.noCustomImages");
+        imagesContainer.appendChild(empty);
+        return;
+      }
+      images.forEach((sticker) => {
+        imagesContainer.appendChild(buildCustomImageEditor(sticker.id, getStyle, onStyleChange, refreshImagesSection));
+      });
+    };
+    refreshImagesSection();
+    this._styleRefreshers.push(refreshImagesSection);
+  }
+
+  // NEW: multi-stop gradient editor. Kept simple/opt-in — the plain
+  // background/backgroundEnd swatches above already cover the common
+  // "two-color fade" case; this only appears once backgroundMode is
+  // "gradient", and starts collapsed behind a checkbox so someone who just
+  // wants the simple 2-color fade never has to look at it.
+  _buildGradientSection(panel) {
+    this.gradientWrap = document.createElement("div");
+    panel.appendChild(this.gradientWrap);
+
+    const toggleLabel = document.createElement("label");
+    toggleLabel.className = "checkbox-row";
+    this.gradientToggle = document.createElement("input");
+    this.gradientToggle.type = "checkbox";
+    this.gradientToggle.addEventListener("change", () => {
+      const style = this._draftStyle;
+      if (this.gradientToggle.checked) {
+        style.backgroundGradientStops = [
+          { offset: 0, color: style.colors.background || "#0A0A0F" },
+          { offset: 1, color: style.colors.backgroundEnd || style.colors.background || "#0A0A0F" },
+        ];
+      } else {
+        style.backgroundGradientStops = null;
+      }
+      this._renderCanvas();
+      this._refreshGradientSection();
+    });
+    const toggleText = document.createElement("span");
+    toggleText.textContent = t("templateStudio.advancedGradientToggle");
+    toggleLabel.append(this.gradientToggle, toggleText);
+    this.gradientWrap.appendChild(toggleLabel);
+
+    this.gradientStopsList = document.createElement("div");
+    this.gradientWrap.appendChild(this.gradientStopsList);
+
+    const addStopBtn = document.createElement("button");
+    addStopBtn.textContent = t("templateStudio.addGradientStop");
+    addStopBtn.style.marginBottom = "12px";
+    addStopBtn.addEventListener("click", () => {
+      const stops = this._draftStyle.backgroundGradientStops;
+      if (!stops) return;
+      const color = GRADIENT_STOP_COLORS[stops.length % GRADIENT_STOP_COLORS.length];
+      stops.push({ offset: 0.5, color });
+      stops.sort((a, b) => a.offset - b.offset);
+      this._renderCanvas();
+      this._refreshGradientSection();
+    });
+    this.gradientAddBtn = addStopBtn;
+    this.gradientWrap.appendChild(addStopBtn);
+
+    const angleWrap = document.createElement("div");
+    angleWrap.style.marginBottom = "12px";
+    const angleLabel = document.createElement("label");
+    angleLabel.className = "field-label";
+    angleLabel.textContent = t("templateStudio.gradientAngleLabel");
+    angleWrap.appendChild(angleLabel);
+    this.gradientAngleInput = document.createElement("input");
+    this.gradientAngleInput.type = "number";
+    this.gradientAngleInput.min = "0";
+    this.gradientAngleInput.max = "360";
+    this.gradientAngleInput.step = "1";
+    this.gradientAngleInput.addEventListener("input", () => {
+      const v = Number(this.gradientAngleInput.value);
+      if (Number.isFinite(v)) {
+        this._draftStyle.backgroundGradientAngle = clamp(v, 0, 360);
+        this._renderCanvas();
+      }
+    });
+    angleWrap.appendChild(this.gradientAngleInput);
+    this.gradientAngleWrap = angleWrap;
+    this.gradientWrap.appendChild(angleWrap);
+
+    this._styleRefreshers.push(() => this._refreshGradientSection());
+    this._refreshGradientSection();
+  }
+
+  _refreshGradientSection() {
+    if (!this.gradientWrap) return;
+    const style = this._draftStyle;
+    const isGradientMode = style.backgroundMode === "gradient";
+    this.gradientWrap.style.display = isGradientMode ? "" : "none";
+    if (!isGradientMode) return;
+
+    const stops = style.backgroundGradientStops;
+    this.gradientToggle.checked = !!stops;
+    this.gradientStopsList.style.display = stops ? "" : "none";
+    this.gradientAddBtn.style.display = stops ? "" : "none";
+    this.gradientAngleWrap.style.display = stops ? "" : "none";
+    if (!stops) return;
+
+    this.gradientAngleInput.value = String(Math.round(style.backgroundGradientAngle ?? 180));
+
+    this.gradientStopsList.innerHTML = "";
+    stops.forEach((stop, i) => {
+      const row = document.createElement("div");
+      row.className = "gradient-stop-row";
+
+      const colorInput = document.createElement("input");
+      colorInput.type = "color";
+      colorInput.className = "color-swatch";
+      colorInput.value = stop.color;
+      colorInput.addEventListener("input", () => {
+        stop.color = colorInput.value;
+        this._renderCanvas();
+      });
+      row.appendChild(colorInput);
+
+      const offsetInput = document.createElement("input");
+      offsetInput.type = "number";
+      offsetInput.min = "0";
+      offsetInput.max = "100";
+      offsetInput.step = "1";
+      offsetInput.value = String(Math.round(stop.offset * 100));
+      offsetInput.title = t("templateStudio.gradientStopOffset");
+      offsetInput.addEventListener("input", () => {
+        const v = Number(offsetInput.value);
+        if (Number.isFinite(v)) {
+          stop.offset = clamp(v / 100, 0, 1);
+          this._renderCanvas();
+        }
+      });
+      row.appendChild(offsetInput);
+
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "danger";
+      removeBtn.textContent = "✕";
+      removeBtn.disabled = stops.length <= 2;
+      removeBtn.addEventListener("click", () => {
+        const idx = stops.indexOf(stop);
+        if (idx !== -1 && stops.length > 2) {
+          stops.splice(idx, 1);
+          this._renderCanvas();
+          this._refreshGradientSection();
+        }
+      });
+      row.appendChild(removeBtn);
+
+      this.gradientStopsList.appendChild(row);
+    });
+  }
+
+  // NEW: procedural, asset-free background texture overlay.
+  _buildTextureSection(panel) {
+    const labels = backgroundTextureLabels();
+    const textureRow = buildSelectRow(
+      t("templateStudio.textureLabel"),
+      BACKGROUND_TEXTURES.reduce((acc, key) => ({ ...acc, [key]: labels[key] }), {}),
+      () => this._draftStyle.backgroundTexture || "none",
+      (value) => {
+        this._draftStyle.backgroundTexture = value;
+        this._renderCanvas();
+        this._refreshTextureSection();
+      }
+    );
+    panel.appendChild(textureRow.el);
+    this._styleRefreshers.push(textureRow.refresh);
+
+    const opacityRow = buildSliderRow(
+      t("templateStudio.textureOpacityLabel"),
+      0.02,
+      0.6,
+      0.01,
+      () => this._draftStyle.backgroundTextureOpacity ?? 0.15,
+      (value) => {
+        this._draftStyle.backgroundTextureOpacity = value;
+        this._renderCanvas();
+      }
+    );
+    panel.appendChild(opacityRow.el);
+    this.textureOpacityWrap = opacityRow.el;
+    this._styleRefreshers.push(opacityRow.refresh);
+    this._styleRefreshers.push(() => this._refreshTextureSection());
+    this._refreshTextureSection();
+  }
+
+  _refreshTextureSection() {
+    if (!this.textureOpacityWrap) return;
+    const active = (this._draftStyle.backgroundTexture || "none") !== "none";
+    this.textureOpacityWrap.style.display = active ? "" : "none";
+  }
+
+  // -- Element tab: whatever's selected on the canvas ----------------------
+  // A near-direct port of layoutEditor.js's property panel, plus a new
+  // Shadow section available on every element type.
+  _buildElementTab(container) {
     this.propEmpty = document.createElement("div");
     this.propEmpty.className = "field-hint";
     this.propEmpty.textContent = t("layoutEditor.emptyHint");
@@ -446,19 +883,12 @@ export class LayoutEditor {
       return input;
     };
 
-    // Ranges intentionally extend well past 0-100%: elements can be
-    // dragged/resized to bleed off the canvas edges or be dramatically
-    // over/undersized, for whatever creative effect the user is after.
     this.inputX = makeNumberRow(t("layoutEditor.posXLabel"), -50, 150, 0.1, (v) => this._setSelectedField("cx", v / 100));
     this.inputY = makeNumberRow(t("layoutEditor.posYLabel"), -50, 150, 0.1, (v) => this._setSelectedField("cy", v / 100));
     this.inputW = makeNumberRow(t("layoutEditor.widthLabel"), 2, 250, 0.1, (v) => this._setSelectedField("w", v / 100));
     this.inputH = makeNumberRow(t("layoutEditor.heightLabel"), 2, 250, 0.1, (v) => this._setSelectedField("h", v / 100));
     this.inputRot = makeNumberRow(t("layoutEditor.rotationLabel"), -180, 180, 1, (v) => this._setSelectedField("rotation", v));
 
-    // -- Per-element style overrides — every element starts inheriting the
-    // template's global look, so a fresh layout renders identically to
-    // before any of this is touched; each control here diverges just that
-    // one element from the template on demand.
     const styleHeader = document.createElement("div");
     styleHeader.className = "section-header";
     styleHeader.textContent = t("layoutEditor.elementStyleHeader");
@@ -537,16 +967,13 @@ export class LayoutEditor {
     this._buildCardStyleSection();
     this._buildFontSection();
     this._buildAnimationSection();
+    this._buildShadowSection();
     this._buildTextSection();
     this._buildShapeSection();
     this._buildImageSection();
     this._buildDeleteSection();
   }
 
-  // Small local variant of the shared makeNumberRow above, but appending
-  // into an arbitrary container (a type-specific field group) instead of
-  // always this.propFields directly, and returning the wrapper div too so
-  // callers can toggle its visibility per element type.
   _appendNumberRow(container, labelText, min, max, step, onChange) {
     const wrap = document.createElement("div");
     wrap.style.marginBottom = "12px";
@@ -615,13 +1042,10 @@ export class LayoutEditor {
     return { wrap, input };
   }
 
-  // DayCard-only: lets a card borrow the visual look of one of the app's
-  // other built-in layouts instead of the plain default panel.
   _buildCardStyleSection() {
     const header = document.createElement("div");
     header.className = "section-header";
     header.textContent = t("layoutEditor.cardSkinHeader");
-    this.cardSkinSectionHeader = header;
     this.propFields.appendChild(header);
     const labels = cardStyleLabels();
     const { wrap, select } = this._appendSelectRow(
@@ -634,15 +1058,10 @@ export class LayoutEditor {
     this.cardStyleSelect = select;
   }
 
-  // Font override — meaningful for dayCard/header/text (anything that
-  // draws text) — mirrors assetsTab.js's buildFontAssetCard upload/reset
-  // pattern, plus a dropdown of already-uploaded fonts so one doesn't need
-  // to be re-picked from disk if it's already in the library.
   _buildFontSection() {
     const header = document.createElement("div");
     header.className = "section-header";
     header.textContent = t("layoutEditor.fontHeader");
-    this.fontSectionHeader = header;
     this.propFields.appendChild(header);
 
     this.fontWrap = document.createElement("div");
@@ -719,7 +1138,6 @@ export class LayoutEditor {
     this.fontLibrarySelect.value = current && listCustomFonts().some((f) => f.path === current) ? current : "";
   }
 
-  // All element types can be animated.
   _buildAnimationSection() {
     const header = document.createElement("div");
     header.className = "section-header";
@@ -745,7 +1163,44 @@ export class LayoutEditor {
     this.animIntensitySelect = intensitySelect;
   }
 
-  // Text-only: content, alignment, color, size.
+  // NEW: a static drop shadow, available on every element type — a separate
+  // concept from the "Glow" animation style above (see renderer.js's
+  // applyElementShadow for how the two compose).
+  _buildShadowSection() {
+    const header = document.createElement("div");
+    header.className = "section-header";
+    header.textContent = t("templateStudio.shadowHeader");
+    this.propFields.appendChild(header);
+
+    const { input: colorInput } = this._appendColorRow(
+      this.propFields,
+      t("templateStudio.shadowColorLabel"),
+      (value) => this._setSelectedField("shadowColor", value),
+      () => this._setSelectedField("shadowColor", null)
+    );
+    this.shadowColorInput = colorInput;
+
+    const { input: blurInput } = this._appendNumberRow(this.propFields, t("templateStudio.shadowBlurLabel"), 0, 60, 1, (v) =>
+      this._setSelectedField("shadowBlur", v)
+    );
+    this.shadowBlurInput = blurInput;
+
+    const { input: offsetXInput } = this._appendNumberRow(this.propFields, t("templateStudio.shadowOffsetXLabel"), -60, 60, 1, (v) =>
+      this._setSelectedField("shadowOffsetX", v)
+    );
+    this.shadowOffsetXInput = offsetXInput;
+
+    const { input: offsetYInput } = this._appendNumberRow(this.propFields, t("templateStudio.shadowOffsetYLabel"), -60, 60, 1, (v) =>
+      this._setSelectedField("shadowOffsetY", v)
+    );
+    this.shadowOffsetYInput = offsetYInput;
+
+    const { input: shadowOpacityInput } = this._appendNumberRow(this.propFields, t("templateStudio.shadowOpacityLabel"), 5, 100, 1, (v) =>
+      this._setSelectedField("shadowOpacity", v / 100)
+    );
+    this.shadowOpacityInput = shadowOpacityInput;
+  }
+
   _buildTextSection() {
     this.textFieldsWrap = document.createElement("div");
     const header = document.createElement("div");
@@ -793,7 +1248,6 @@ export class LayoutEditor {
     this.propFields.appendChild(this.textFieldsWrap);
   }
 
-  // Shape-only: kind, fill, stroke.
   _buildShapeSection() {
     this.shapeFieldsWrap = document.createElement("div");
     const header = document.createElement("div");
@@ -834,7 +1288,6 @@ export class LayoutEditor {
     this.propFields.appendChild(this.shapeFieldsWrap);
   }
 
-  // Image-only: upload/replace the source file.
   _buildImageSection() {
     this.imageFieldsWrap = document.createElement("div");
     const header = document.createElement("div");
@@ -870,8 +1323,6 @@ export class LayoutEditor {
     this.propFields.appendChild(this.imageFieldsWrap);
   }
 
-  // Only freeform (text/shape/image) elements can be deleted — the 9
-  // fixed day-card/header/logo slots are a permanent part of every layout.
   _buildDeleteSection() {
     this.deleteWrap = document.createElement("div");
     this.deleteWrap.style.marginTop = "18px";
@@ -884,6 +1335,7 @@ export class LayoutEditor {
   }
 
   _setSelectedField(field, rawValue) {
+    if (this._isLocked()) return;
     const el = this._draftElements.find((e) => e.id === this._selectedId);
     if (!el) return;
     let value = rawValue;
@@ -894,12 +1346,8 @@ export class LayoutEditor {
     this._renderCanvas();
   }
 
-  // Reorders the element within _draftElements (array order = draw/z-order,
-  // later = on top) and rebuilds the overlay so its DOM stacking stays in
-  // sync with what's now on top in the canvas — a full rebuild is used here
-  // (rather than a cheap DOM move) since it's a rare, deliberate action, not
-  // a per-frame drag update.
   _bringToFront(id) {
+    if (this._isLocked()) return;
     const idx = this._draftElements.findIndex((e) => e.id === id);
     if (idx === -1 || idx === this._draftElements.length - 1) return;
     const [el] = this._draftElements.splice(idx, 1);
@@ -909,6 +1357,7 @@ export class LayoutEditor {
   }
 
   _sendToBack(id) {
+    if (this._isLocked()) return;
     const idx = this._draftElements.findIndex((e) => e.id === id);
     if (idx <= 0) return;
     const [el] = this._draftElements.splice(idx, 1);
@@ -917,9 +1366,8 @@ export class LayoutEditor {
     this._renderOverlay();
   }
 
-  // Freeform elements (text/shape/image) are additions on top of the fixed
-  // 9 — any number can be added/removed, unlike the day cards/header/logo.
   _addFreeformElement(type, overrides = {}) {
+    if (this._isLocked()) return;
     const el = createFreeformElement(type, overrides);
     this._draftElements.push(el);
     this._renderCanvas();
@@ -928,8 +1376,9 @@ export class LayoutEditor {
   }
 
   _deleteSelectedElement() {
+    if (this._isLocked()) return;
     const id = this._selectedId;
-    if (!id || CUSTOM_LAYOUT_ELEMENT_IDS.includes(id)) return; // the fixed 9 can't be deleted, only freeform extras
+    if (!id || CUSTOM_LAYOUT_ELEMENT_IDS.includes(id)) return;
     const idx = this._draftElements.findIndex((e) => e.id === id);
     if (idx === -1) return;
     this._draftElements.splice(idx, 1);
@@ -938,28 +1387,38 @@ export class LayoutEditor {
     this._renderOverlay();
   }
 
-  _refreshLoadSelect() {
-    const current = this._loadedLibraryId;
-    this.loadSelect.innerHTML = "";
+  _refreshLoadLayoutSelect() {
+    this.loadLayoutSelect.innerHTML = "";
     const blank = document.createElement("option");
     blank.value = "";
-    blank.textContent = t("layoutEditor.unsavedDraft");
-    this.loadSelect.appendChild(blank);
+    blank.textContent = t("templateStudio.loadLayoutPlaceholder");
+    this.loadLayoutSelect.appendChild(blank);
     listCustomLayouts().forEach((entry) => {
       const opt = document.createElement("option");
       opt.value = entry.id;
       opt.textContent = entry.name;
-      this.loadSelect.appendChild(opt);
+      this.loadLayoutSelect.appendChild(opt);
     });
-    const stillExists = current && getCustomLayout(current);
-    this.loadSelect.value = stillExists ? current : "";
-    this.deleteLibraryBtn.disabled = !stillExists;
+  }
+
+  _refreshLibraryState() {
+    const style = this._draftStyle;
+    const entry = this._loadedLibraryId ? getCustomTemplate(this._loadedLibraryId) : null;
+    this.nameInput.value = entry ? entry.name : this.nameInput.value;
+    this.deleteLibraryBtn.disabled = !entry;
+    void style;
+  }
+
+  _refreshLockUI() {
+    const locked = this._isLocked();
+    this.lockBadge.style.display = locked ? "" : "none";
+    this._lockableEls.forEach((el) => {
+      if (el) el.disabled = locked;
+    });
   }
 
   _renderCanvas() {
-    const baseStyle = this.getBaseStyle ? this.getBaseStyle() : null;
-    const draftStyle = { ...baseStyle, customLayout: { elements: this._draftElements } };
-    renderStreamplan(this.canvasEl, SAMPLE_PROFILE, draftStyle, null, [CANVAS_WIDTH, CANVAS_HEIGHT]);
+    renderStreamplan(this.canvasEl, SAMPLE_PROFILE, this._draftStyle, null, [CANVAS_WIDTH, CANVAS_HEIGHT]);
   }
 
   _positionHandleEl(div, el) {
@@ -974,12 +1433,8 @@ export class LayoutEditor {
   _renderOverlay() {
     this.overlayLayer.innerHTML = "";
     this._handleEls = new Map();
+    const locked = this._isLocked();
 
-    // Iterate in the elements array's own order — this is the user-
-    // controlled z-order (see _bringToFront/_sendToBack), and DOM paint
-    // order among unpositioned-vs-absolute siblings follows source order,
-    // so this keeps "what you can click on top" matching "what you see on
-    // top" in exact sync with the canvas.
     this._draftElements.forEach((el) => {
       const div = document.createElement("div");
       div.className = "layout-el-handle" + (el.id === this._selectedId ? " selected" : "");
@@ -990,22 +1445,24 @@ export class LayoutEditor {
       label.textContent = elementLabel(el);
       div.appendChild(label);
 
-      Object.keys(CORNER_SIGNS).forEach((corner) => {
-        const handle = document.createElement("div");
-        handle.className = `layout-el-resize ${corner}`;
-        handle.addEventListener("pointerdown", (e) => this._startResize(e, el, corner));
-        div.appendChild(handle);
-      });
+      if (!locked) {
+        Object.keys(CORNER_SIGNS).forEach((corner) => {
+          const handle = document.createElement("div");
+          handle.className = `layout-el-resize ${corner}`;
+          handle.addEventListener("pointerdown", (e) => this._startResize(e, el, corner));
+          div.appendChild(handle);
+        });
 
-      const rotateHandle = document.createElement("div");
-      rotateHandle.className = "layout-el-rotate";
-      rotateHandle.addEventListener("pointerdown", (e) => this._startRotate(e, el));
-      div.appendChild(rotateHandle);
+        const rotateHandle = document.createElement("div");
+        rotateHandle.className = "layout-el-rotate";
+        rotateHandle.addEventListener("pointerdown", (e) => this._startRotate(e, el));
+        div.appendChild(rotateHandle);
+      }
 
       div.addEventListener("pointerdown", (e) => {
-        if (e.target !== div && e.target !== label) return; // handles run their own listeners
+        if (e.target !== div && e.target !== label) return;
         this._selectElement(el.id);
-        this._startMove(e, el);
+        if (!locked) this._startMove(e, el);
       });
 
       this.overlayLayer.appendChild(div);
@@ -1014,13 +1471,19 @@ export class LayoutEditor {
   }
 
   _selectElement(id) {
-    if (this._selectedId === id) return;
+    if (this._selectedId === id) {
+      // Still keep the sidebar in sync even on a no-op reselect (e.g. after
+      // a fresh open() where nothing was previously selected).
+      this._activateSidebarTab(id ? "element" : "style");
+      return;
+    }
     const prev = this._handleEls.get(this._selectedId);
     if (prev) prev.classList.remove("selected");
     this._selectedId = id;
     const next = this._handleEls.get(id);
     if (next) next.classList.add("selected");
     this._refreshPropertyPanel();
+    this._activateSidebarTab(id ? "element" : "style");
   }
 
   _refreshPropertyPanel() {
@@ -1042,9 +1505,6 @@ export class LayoutEditor {
     const isImage = el.type === "image";
     const isFreeform = FREEFORM_ELEMENT_TYPES.includes(el.type);
 
-    // Corner shape / accent color are meaningless on the logo (always
-    // circular, no accent-colored parts) and on text/image; the stripe
-    // only exists on cards; shape honors corner shape only for rects.
     this.cornerWrap.style.display = isDayCard || isHeader || (isShape && el.shapeKind === "rect") ? "" : "none";
     this.accentWrap.style.display = isDayCard || isHeader ? "" : "none";
     this.stripeWrap.style.display = isDayCard ? "" : "none";
@@ -1068,8 +1528,7 @@ export class LayoutEditor {
     if (active !== this.cornerSelect) this.cornerSelect.value = el.cornerStyle || "";
     if (active !== this.stripeCheckbox) this.stripeCheckbox.checked = el.showStripe ?? true;
     if (active !== this.accentColorInput) {
-      const baseStyle = this.getBaseStyle ? this.getBaseStyle() : null;
-      this.accentColorInput.value = el.accentColor || baseStyle?.colors?.accent || "#7b5fd9";
+      this.accentColorInput.value = el.accentColor || this._draftStyle?.colors?.accent || "#7b5fd9";
     }
     if (active !== this.inputOpacity) this.inputOpacity.value = String(Math.round((el.opacity ?? 1) * 100));
 
@@ -1080,11 +1539,16 @@ export class LayoutEditor {
     this.fontFilenameEl.textContent = el.fontFamily ? t("layoutEditor.customFontUsing", { family: el.fontFamily }) : t("layoutEditor.usingTemplateFont");
     this._refreshFontLibrarySelect();
 
+    if (active !== this.shadowColorInput) this.shadowColorInput.value = el.shadowColor || "#000000";
+    if (active !== this.shadowBlurInput) this.shadowBlurInput.value = String(el.shadowBlur ?? 16);
+    if (active !== this.shadowOffsetXInput) this.shadowOffsetXInput.value = String(el.shadowOffsetX ?? 0);
+    if (active !== this.shadowOffsetYInput) this.shadowOffsetYInput.value = String(el.shadowOffsetY ?? 8);
+    if (active !== this.shadowOpacityInput) this.shadowOpacityInput.value = String(Math.round((el.shadowOpacity ?? 0.6) * 100));
+
     if (active !== this.textArea) this.textArea.value = el.text || "";
     if (active !== this.textAlignSelect) this.textAlignSelect.value = el.align || "center";
     if (active !== this.textColorInput) {
-      const baseStyle = this.getBaseStyle ? this.getBaseStyle() : null;
-      this.textColorInput.value = el.color || baseStyle?.colors?.textPrimary || "#FFFFFF";
+      this.textColorInput.value = el.color || this._draftStyle?.colors?.textPrimary || "#FFFFFF";
     }
     if (active !== this.textSizeInput) this.textSizeInput.value = ((el.fontSize || 0.03) * 100).toFixed(1);
 
@@ -1171,9 +1635,6 @@ export class LayoutEditor {
     const move = (ev) => {
       const fx = (ev.clientX - rect.left) / rect.width;
       const fy = (ev.clientY - rect.top) / rect.height;
-      // atan2 needs real on-screen pixels (rect.width/height), not raw
-      // 0-1 fractions — the canvas isn't square (1400x1750), so angles
-      // computed directly on fractions would be skewed.
       const px = fx * rect.width;
       const py = fy * rect.height;
       const cxPx = el.cx * rect.width;
@@ -1195,93 +1656,46 @@ export class LayoutEditor {
     window.addEventListener("pointerup", up);
   }
 
-  // Shared by the in-editor "Import…" button and the topBar "Import Layout"
-  // button: runs the file picker, reads + parses the .splayout file, and adds
-  // it to the permanent library. Returns the new library entry, or null if
-  // the user canceled or the file was invalid (an error dialog is already
-  // shown in that case, so callers just need to bail out silently).
-  async _importLayoutFromDialog() {
-    let targetPath;
-    try {
-      targetPath = await window.streamplanAPI.chooseOpenLayoutPath();
-    } catch (err) {
-      await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("common.fileDialogError", { message: err.message }));
-      return null;
+  _loadStyle(style) {
+    const base = style || customBaseStyle();
+    if (!base.customLayout || !base.customLayout.elements?.length) {
+      base.customLayout = { elements: buildDefaultCustomLayoutElements() };
+    } else {
+      base.customLayout = { elements: sanitizeCustomLayout(base.customLayout.elements) };
     }
-    if (!targetPath) return null;
-    try {
-      const bytes = await window.streamplanAPI.readFile(targetPath);
-      const parsed = JSON.parse(new TextDecoder().decode(bytes));
-      if (!parsed || !parsed.elements) throw new Error(t("layoutEditor.invalidLayoutFile"));
-      return addCustomLayout({ name: parsed.name || "Imported Layout", elements: parsed.elements });
-    } catch (err) {
-      console.error(err);
-      await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("layoutEditor.importLayoutFailed", { message: err.message }));
-      return null;
-    }
-  }
-
-  // Entry point for the topBar "Import Layout" button: imports a .splayout
-  // file straight into the permanent library (no template context needed)
-  // and opens the editor showing it, so the user gets immediate visual
-  // confirmation of what was just imported. `onClose` (passed through to
-  // open()) lets app.js refresh the Template Customize tab's Layout Style
-  // dropdown once this session ends, so the just-imported layout actually
-  // shows up as a pickable option there instead of only living in memory
-  // until some unrelated refresh happens to fire.
-  async importAndOpen(onClose) {
-    const entry = await this._importLayoutFromDialog();
-    if (!entry) return;
-    this.open({ elements: entry.elements, onClose });
-    this._loadedLibraryId = entry.id;
-    this.nameInput.value = entry.name;
-    this._refreshLoadSelect();
-  }
-
-  // { elements, onApply, onClose } — elements: existing draft to load
-  // (defaults to a fresh seeded layout); onApply: present only when opened
-  // from a Custom Template's Template Customize tab, writes the draft back
-  // on "Apply"; onClose: always invoked once the editor is dismissed
-  // (whether via Apply or a plain Close), so callers can refresh their own
-  // UI — e.g. the Layout Style dropdown's option list, which needs to pick
-  // up any layout the user saved to the library during this session even if
-  // they never clicked Apply.
-  open({ elements, onApply, onClose } = {}) {
-    this._draftElements = elements ? sanitizeCustomLayout(elements) : buildDefaultCustomLayoutElements();
-    this._onApply = onApply || null;
-    this._onClose = onClose || null;
-    this._loadedLibraryId = null;
-    this.nameInput.value = "";
-    this.applyBtn.style.display = this._onApply ? "" : "none";
-    this._refreshLoadSelect();
+    this._draftStyle = base;
+    this._loadedLibraryId = isCustomTemplateId(base.templateId) && base.templateId !== "custom" ? base.templateId : null;
+    const entry = this._loadedLibraryId ? getCustomTemplate(this._loadedLibraryId) : null;
+    this.nameInput.value = entry ? entry.name : "";
+    this.deleteLibraryBtn.disabled = !entry;
+    this._selectedId = null;
+    this._styleRefreshers.forEach((fn) => fn());
+    this._refreshLockUI();
+    this._refreshLoadLayoutSelect();
     this._selectElement(null);
-    this.overlayEl.classList.add("open");
     this._renderCanvas();
     this._renderOverlay();
-    this._startAnimTicker();
   }
 
-  openStandalone(onClose) {
-    this.open({ onClose });
+  // { style, onClose } — style: an existing StyleConfig to edit (a fresh
+  // customBaseStyle() if omitted); onClose: invoked once the Studio is
+  // dismissed (Apply or plain Close) so app.js/stylePanel.js can refresh
+  // the Templates gallery to reflect anything saved to the library.
+  open({ style, onClose } = {}) {
+    this._onClose = onClose || null;
+    this._loadStyle(style ? cloneStyle(style) : null);
+    this.overlayEl.classList.add("open");
+    this._startAnimTicker();
   }
 
   close() {
     this.overlayEl.classList.remove("open");
-    this._onApply = null; // draft is discarded; the live style was never touched
     this._stopAnimTicker();
     const onClose = this._onClose;
     this._onClose = null;
     if (onClose) onClose();
   }
 
-  // renderStreamplan always gets t=null from _renderCanvas (a plain,
-  // non-GIF-export render) — animation phase only advances via
-  // resolvePhase's wall-clock fallback, which requires something to
-  // actually keep calling _renderCanvas() while idle. Without this ticker,
-  // per-element animStyle would never be visible while editing (only in an
-  // exported GIF, which drives its own t timeline). Mirrors
-  // previewCanvas.js's _startStickerTicker, scoped to this editor's own
-  // lifecycle (started on open(), stopped on close()) instead of the app's.
   _startAnimTicker() {
     this._stopAnimTicker();
     this._animTickHandle = setInterval(() => {

@@ -698,6 +698,36 @@ input[type="checkbox"]:checked::after {
 #layoutEditorOverlay.open {
   display: flex;
 }
+
+/* -- Template Studio -------------------------------------------------------- */
+/* Reuses every .layout-editor- and .layout-el- class above (they're plain
+   class selectors, not scoped to #layoutEditorOverlay) — only the overlay
+   container itself and its few genuinely new controls need new rules. */
+
+#templateStudioOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 3, 8, 0.9);
+  display: none;
+  z-index: 60;
+}
+#templateStudioOverlay.open {
+  display: flex;
+}
+.gradient-stop-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.gradient-stop-row input[type="number"] {
+  flex: 1;
+  min-width: 0;
+}
+.gradient-stop-row button {
+  flex-shrink: 0;
+  padding: 6px 10px;
+}
 .layout-editor-shell {
   flex: 1;
   display: flex;
@@ -723,6 +753,55 @@ input[type="checkbox"]:checked::after {
 }
 .layout-editor-toolbar-spacer {
   flex: 1;
+}
+.shape-add-menu {
+  position: relative;
+}
+.shape-add-menu-list {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 190px;
+  background: var(--panel-alt);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+  padding: 6px;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 70;
+}
+.shape-add-menu.open .shape-add-menu-list {
+  display: flex;
+}
+.shape-add-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.shape-add-menu-item:hover {
+  background: color-mix(in srgb, var(--accent) 24%, #221c33);
+  border-color: var(--accent-bright);
+  transform: none;
+  box-shadow: none;
+}
+.shape-add-menu-item-icon {
+  width: 18px;
+  text-align: center;
+  color: var(--accent-bright);
+  flex-shrink: 0;
 }
 .layout-editor-library-row {
   min-height: 50px;
