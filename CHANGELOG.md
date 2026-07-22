@@ -2,6 +2,11 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.9] - 2026-07-22
+
+### Fixed
+- The packaged app's own icon (taskbar, Task Manager, and other places that read the .exe file directly) still showed the default Electron icon, even after v1.0.8's fix for it being missing from the app bundle. electron-builder was configured to skip embedding the icon into the .exe entirely.
+
 ## [1.0.8] - 2026-07-22
 
 ### Added
