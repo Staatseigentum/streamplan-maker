@@ -2,6 +2,11 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.15] - 2026-07-23
+
+### Fixed
+- A Custom Template's Customize tab had no way to pick up a Custom Layout you'd built, saved, or imported without opening the full Template Studio — the Layout Editor's own "saved layout" list worked fine, but there was nowhere in the main window to apply one to a template directly, so imported layouts could feel like they'd vanished. Added a "Custom Layout" picker right there in the Customize tab.
+
 ## [1.0.14] - 2026-07-23
 
 ### Changed

@@ -1,6 +1,7 @@
 import { COLOR_KEYS, FONT_SCALE_MIN, FONT_SCALE_MAX, cloneStyle, styleFromDict } from "../models/style.js";
 import { TEMPLATE_ORDER, getTemplate, customBaseStyle } from "../models/templates.js";
 import { addCustomTemplate, removeCustomTemplate, getCustomTemplate, isCustomTemplateId } from "../models/customTemplateLibrary.js";
+import { listCustomLayouts, getCustomLayout } from "../models/customLayoutLibrary.js";
 import { TemplateGallery } from "./templateGallery.js";
 import { buildAssetsTab } from "./assetsTab.js";
 import { listCustomFonts } from "../rendering/fontLibrary.js";
@@ -347,6 +348,58 @@ export class StylePanel {
     openBtn.textContent = t("templateStudio.openBtn");
     openBtn.addEventListener("click", () => this.openTemplateStudio({ style: this.getStyle() }));
     panel.appendChild(openBtn);
+
+    // A lighter-weight alternative to opening the full Template Studio: pick
+    // any layout arrangement already saved to the library (built by hand in
+    // the Layout Editor, or imported — locally or from Streamplan Hub) and
+    // apply it straight onto this template's customLayout. This is the
+    // "Layout Style" list imported/saved layouts are meant to show up in —
+    // it must be rebuilt (see refreshLayoutSelect below, wired into
+    // this._refreshers) any time the library changes, e.g. via the topBar
+    // Import Layout button or the standalone Layout Editor's Save to Library
+    // (both already call stylePanel.refreshAll() on close for this reason).
+    const layoutPickHint = document.createElement("div");
+    layoutPickHint.className = "field-hint";
+    layoutPickHint.textContent = t("style.applyCustomLayoutHint");
+    panel.appendChild(layoutPickHint);
+
+    const layoutSelectWrap = document.createElement("div");
+    layoutSelectWrap.style.marginBottom = "12px";
+    const layoutSelectLabel = document.createElement("label");
+    layoutSelectLabel.className = "field-label";
+    layoutSelectLabel.textContent = t("style.customLayoutLabel");
+    layoutSelectWrap.appendChild(layoutSelectLabel);
+    const layoutSelect = document.createElement("select");
+    layoutSelectWrap.appendChild(layoutSelect);
+    panel.appendChild(layoutSelectWrap);
+
+    const refreshLayoutSelect = () => {
+      layoutSelect.innerHTML = "";
+      const blank = document.createElement("option");
+      blank.value = "";
+      blank.textContent = t("templateStudio.loadLayoutPlaceholder");
+      layoutSelect.appendChild(blank);
+      listCustomLayouts().forEach((entry) => {
+        const opt = document.createElement("option");
+        opt.value = entry.id;
+        opt.textContent = entry.name;
+        layoutSelect.appendChild(opt);
+      });
+      layoutSelect.value = "";
+      layoutSelect.disabled = !!this.getStyle().layoutLocked;
+    };
+    layoutSelect.addEventListener("change", () => {
+      const id = layoutSelect.value;
+      if (!id) return;
+      const entry = getCustomLayout(id);
+      if (!entry) return;
+      const style = this.getStyle();
+      style.customLayout = { elements: entry.elements.map((el) => ({ ...el })) };
+      this.onStyleChange(style);
+      refreshLayoutSelect();
+    });
+    refreshLayoutSelect();
+    this._refreshers.push(refreshLayoutSelect);
 
     const actions = document.createElement("div");
     actions.className = "asset-actions";
