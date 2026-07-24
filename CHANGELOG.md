@@ -2,6 +2,11 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.16] - 2026-07-24
+
+### Added
+- A new Account tab in Settings: create a Streamplan Hub account or log into an existing one right from the app, with email verification (a 6-digit code sent to your inbox) — no need to open the website first. Full profile editing (username, bio, avatar) and upload management stay on the website's own Account page, which is one click away once you're logged in.
+
 ## [1.0.15] - 2026-07-23
 
 ### Fixed
