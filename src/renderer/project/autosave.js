@@ -98,6 +98,8 @@ export async function loadAutosave() {
     previewFps: payload.previewFps || null,
     language: payload.language || null,
     tutorialSeen: payload.tutorialSeen === true,
+    authToken: payload.authToken || null,
+    authUser: payload.authUser || null,
   };
 }
 
@@ -117,7 +119,7 @@ export async function loadAutosaveLanguage() {
   }
 }
 
-export async function saveAutosave(doc, appTheme, displayMode, previewFps, language, tutorialSeen) {
+export async function saveAutosave(doc, appTheme, displayMode, previewFps, language, tutorialSeen, authToken = null, authUser = null) {
   if (!window.streamplanAPI?.getSettingsPath) return;
   const settingsPath = await window.streamplanAPI.getSettingsPath();
   const payload = {
@@ -127,6 +129,8 @@ export async function saveAutosave(doc, appTheme, displayMode, previewFps, langu
     previewFps,
     language,
     tutorialSeen: tutorialSeen === true,
+    authToken,
+    authUser,
     customFonts: libraryToDict(),
     customTemplates: customTemplatesToDict(),
     customLayouts: customLayoutsToDict(),

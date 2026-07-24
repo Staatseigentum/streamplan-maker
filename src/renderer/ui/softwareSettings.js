@@ -1,8 +1,25 @@
 import { APP_THEMES, applyAppTheme } from "./appThemes.js";
 import { PREVIEW_FPS_OPTIONS } from "../../shared/constants.js";
 import { SUPPORTED_LANGUAGES, t } from "../i18n/index.js";
+import * as accountAuth from "../services/accountAuth.js";
 
 const COMMUNITY_SITE_URL = "https://streamplan-maker.online/";
+const ACCOUNT_SITE_URL = "https://streamplan-maker.online/account";
+const FORGOT_PASSWORD_URL = "https://streamplan-maker.online/forgot-password";
+
+function buildInputRow(labelText, type, extraAttrs = {}) {
+  const wrap = document.createElement("div");
+  wrap.style.marginBottom = "14px";
+  const label = document.createElement("label");
+  label.className = "field-label";
+  label.textContent = labelText;
+  wrap.appendChild(label);
+  const input = document.createElement("input");
+  input.type = type;
+  Object.entries(extraAttrs).forEach(([k, v]) => input.setAttribute(k, v));
+  wrap.appendChild(input);
+  return { el: wrap, input };
+}
 
 function buildSelectRow(labelText, options, getValue, setValue) {
   const wrap = document.createElement("div");
@@ -40,6 +57,8 @@ export class SoftwareSettings {
       onPreviewFpsChange,
       getLanguage,
       onLanguageChange,
+      getAuthUser,
+      onAuthChange,
     }
   ) {
     this.overlayEl = overlayEl;
@@ -52,6 +71,8 @@ export class SoftwareSettings {
     this.onPreviewFpsChange = onPreviewFpsChange;
     this.getLanguage = getLanguage;
     this.onLanguageChange = onLanguageChange;
+    this.getAuthUser = getAuthUser;
+    this.onAuthChange = onAuthChange;
     this._refreshers = [];
     this._build();
     this._buildLanguageConfirmModal();
@@ -83,6 +104,7 @@ export class SoftwareSettings {
       ["language", t("settings.tabLanguage")],
       ["updates", t("settings.tabUpdates")],
       ["community", t("settings.tabCommunity")],
+      ["account", t("settings.tabAccount")],
     ];
     this.tabBtns = {};
     this.panelEls = {};
@@ -106,6 +128,7 @@ export class SoftwareSettings {
     this._buildLanguageTab(this.panelEls.language);
     this._buildUpdatesTab(this.panelEls.updates);
     this._buildCommunityTab(this.panelEls.community);
+    this._buildAccountTab(this.panelEls.account);
     this.updatesTabBtn = this.tabBtns.updates;
 
     this.overlayEl.appendChild(modal);
@@ -405,6 +428,268 @@ export class SoftwareSettings {
     this.communityOpenBtn = openBtn;
   }
 
+  // Account tab: register / verify / login live entirely inside the app
+  // (talking to the website's JSON auth API — see services/accountAuth.js);
+  // everything past that (profile, avatar, bio, managing uploads) is
+  // website-only and just links out via openExternal, same pattern the
+  // Community tab already uses.
+  _buildAccountTab(container) {
+    this._accountContainer = container;
+    this._accountView = "login";
+    this._pendingUserId = null;
+    this._renderAccountTab();
+  }
+
+  _accountErrorMessage(code) {
+    const key = code ? `auth.errors.${code}` : null;
+    const known = key && t(key) !== key;
+    return known ? t(key) : t("auth.errors.generic");
+  }
+
+  _renderAccountTab() {
+    const container = this._accountContainer;
+    container.innerHTML = "";
+    const user = this.getAuthUser();
+    if (user) {
+      this._renderAccountLoggedIn(container, user);
+    } else if (this._accountView === "verify") {
+      this._renderAccountVerify(container);
+    } else if (this._accountView === "register") {
+      this._renderAccountRegister(container);
+    } else {
+      this._renderAccountLogin(container);
+    }
+  }
+
+  _renderAccountLoggedIn(container, user) {
+    const hint = document.createElement("div");
+    hint.className = "field-hint";
+    hint.textContent = t("settings.accountLoggedInHint");
+    container.appendChild(hint);
+
+    const header = document.createElement("div");
+    header.className = "section-header";
+    header.textContent = t("settings.accountHeader");
+    container.appendChild(header);
+
+    const nameLine = document.createElement("div");
+    nameLine.className = "field-label";
+    nameLine.style.marginBottom = "14px";
+    nameLine.textContent = t("settings.accountLoggedInAs", { username: user.username });
+    container.appendChild(nameLine);
+
+    const manageBtn = document.createElement("button");
+    manageBtn.className = "primary";
+    manageBtn.textContent = t("settings.accountManageBtn");
+    manageBtn.style.marginRight = "8px";
+    manageBtn.addEventListener("click", () => window.streamplanAPI.openExternal(ACCOUNT_SITE_URL));
+    container.appendChild(manageBtn);
+
+    const logoutBtn = document.createElement("button");
+    logoutBtn.textContent = t("auth.logoutBtn");
+    logoutBtn.addEventListener("click", () => {
+      this.onAuthChange(null, null);
+      this._accountView = "login";
+      this._renderAccountTab();
+    });
+    container.appendChild(logoutBtn);
+  }
+
+  _buildAccountError(container) {
+    const error = document.createElement("div");
+    error.className = "field-warning";
+    error.style.display = "none";
+    container.appendChild(error);
+    return {
+      show: (msg) => {
+        error.innerHTML = `<span class="field-warning-icon">⚠</span><span>${msg}</span>`;
+        error.style.display = "";
+      },
+      hide: () => {
+        error.style.display = "none";
+      },
+    };
+  }
+
+  _renderAccountLogin(container) {
+    const hint = document.createElement("div");
+    hint.className = "field-hint";
+    hint.textContent = t("settings.accountLoginHint");
+    container.appendChild(hint);
+
+    const error = this._buildAccountError(container);
+    const emailRow = buildInputRow(t("auth.emailLabel"), "email", { autocomplete: "email" });
+    const passwordRow = buildInputRow(t("auth.passwordLabel"), "password", { autocomplete: "current-password" });
+    container.append(emailRow.el, passwordRow.el);
+
+    const submitBtn = document.createElement("button");
+    submitBtn.className = "primary";
+    submitBtn.textContent = t("auth.login.submitBtn");
+    submitBtn.style.marginBottom = "10px";
+    submitBtn.addEventListener("click", async () => {
+      error.hide();
+      submitBtn.disabled = true;
+      const result = await accountAuth.login({ email: emailRow.input.value.trim(), password: passwordRow.input.value });
+      submitBtn.disabled = false;
+      if (result.ok) {
+        this.onAuthChange(result.token, result.user);
+        this._renderAccountTab();
+        return;
+      }
+      if (result.reason === "unverified") {
+        this._pendingUserId = result.userId;
+        await accountAuth.resendCode(result.userId);
+        this._accountView = "verify";
+        this._renderAccountTab();
+        return;
+      }
+      error.show(this._accountErrorMessage(result.reason === "invalid" ? "invalidCredentials" : result.error));
+    });
+    container.appendChild(submitBtn);
+
+    const forgotLink = document.createElement("button");
+    forgotLink.className = "account-link-btn";
+    forgotLink.textContent = t("auth.login.forgotPassword");
+    forgotLink.addEventListener("click", () => window.streamplanAPI.openExternal(FORGOT_PASSWORD_URL));
+    container.appendChild(forgotLink);
+
+    const switchRow = document.createElement("div");
+    switchRow.className = "field-hint";
+    switchRow.style.marginTop = "14px";
+    const switchBtn = document.createElement("button");
+    switchBtn.className = "account-link-btn";
+    switchBtn.textContent = t("auth.register.title");
+    switchBtn.addEventListener("click", () => {
+      this._accountView = "register";
+      this._renderAccountTab();
+    });
+    switchRow.append(t("auth.register.haveAccount") + " ", switchBtn);
+    container.appendChild(switchRow);
+  }
+
+  _renderAccountRegister(container) {
+    const hint = document.createElement("div");
+    hint.className = "field-hint";
+    hint.textContent = t("settings.accountRegisterHint");
+    container.appendChild(hint);
+
+    const error = this._buildAccountError(container);
+    const emailRow = buildInputRow(t("auth.emailLabel"), "email", { autocomplete: "email" });
+    const usernameRow = buildInputRow(t("auth.usernameLabel"), "text", { autocomplete: "username", minlength: "3", maxlength: "30" });
+    const passwordRow = buildInputRow(t("auth.passwordLabel"), "password", { autocomplete: "new-password", minlength: "8" });
+    const confirmRow = buildInputRow(t("auth.confirmPasswordLabel"), "password", { autocomplete: "new-password", minlength: "8" });
+    container.append(emailRow.el, usernameRow.el, passwordRow.el, confirmRow.el);
+
+    const privacyRow = document.createElement("label");
+    privacyRow.className = "checkbox-row";
+    privacyRow.style.marginBottom = "14px";
+    const privacyCheckbox = document.createElement("input");
+    privacyCheckbox.type = "checkbox";
+    const privacyText = document.createElement("span");
+    privacyRow.append(privacyCheckbox, privacyText);
+    container.appendChild(privacyRow);
+    // Built as plain text + a clickable link segment rather than one
+    // innerHTML string, so the translated copy can't inject markup.
+    privacyText.textContent = t("auth.register.privacyPre") + " ";
+    const linkBtn = document.createElement("button");
+    linkBtn.type = "button";
+    linkBtn.className = "account-link-btn";
+    linkBtn.textContent = t("footer.datenschutz");
+    linkBtn.addEventListener("click", () => window.streamplanAPI.openExternal("https://streamplan-maker.online/datenschutz"));
+    privacyText.appendChild(linkBtn);
+    privacyText.append(" " + t("auth.register.privacyPost"));
+
+    const submitBtn = document.createElement("button");
+    submitBtn.className = "primary";
+    submitBtn.textContent = t("auth.register.submitBtn");
+    submitBtn.style.marginBottom = "10px";
+    submitBtn.addEventListener("click", async () => {
+      error.hide();
+      if (passwordRow.input.value !== confirmRow.input.value) {
+        error.show(t("auth.errors.passwordMismatch"));
+        return;
+      }
+      if (!privacyCheckbox.checked) {
+        error.show(t("auth.errors.privacyRequired"));
+        return;
+      }
+      submitBtn.disabled = true;
+      const result = await accountAuth.register({
+        email: emailRow.input.value.trim(),
+        username: usernameRow.input.value.trim(),
+        password: passwordRow.input.value,
+        privacyAccepted: true,
+      });
+      submitBtn.disabled = false;
+      if (result.ok) {
+        this._pendingUserId = result.userId;
+        this._accountView = "verify";
+        this._renderAccountTab();
+        return;
+      }
+      error.show(this._accountErrorMessage(result.error));
+    });
+    container.appendChild(submitBtn);
+
+    const switchRow = document.createElement("div");
+    switchRow.className = "field-hint";
+    switchRow.style.marginTop = "14px";
+    const switchBtn = document.createElement("button");
+    switchBtn.className = "account-link-btn";
+    switchBtn.textContent = t("auth.login.title");
+    switchBtn.addEventListener("click", () => {
+      this._accountView = "login";
+      this._renderAccountTab();
+    });
+    switchRow.append(t("auth.register.haveAccount") + " ", switchBtn);
+    container.appendChild(switchRow);
+  }
+
+  _renderAccountVerify(container) {
+    const hint = document.createElement("div");
+    hint.className = "field-hint";
+    hint.textContent = t("auth.verify.subtitle");
+    container.appendChild(hint);
+
+    const error = this._buildAccountError(container);
+    const codeRow = buildInputRow(t("auth.verify.codeLabel"), "text", {
+      inputmode: "numeric",
+      maxlength: "6",
+      autocomplete: "one-time-code",
+    });
+    container.appendChild(codeRow.el);
+
+    const submitBtn = document.createElement("button");
+    submitBtn.className = "primary";
+    submitBtn.textContent = t("auth.verify.submitBtn");
+    submitBtn.style.marginRight = "8px";
+    submitBtn.style.marginBottom = "10px";
+    submitBtn.addEventListener("click", async () => {
+      error.hide();
+      submitBtn.disabled = true;
+      const result = await accountAuth.verifyEmail({ userId: this._pendingUserId, code: codeRow.input.value.trim() });
+      submitBtn.disabled = false;
+      if (result.ok) {
+        this._pendingUserId = null;
+        this.onAuthChange(result.token, result.user);
+        this._renderAccountTab();
+        return;
+      }
+      error.show(this._accountErrorMessage(result.error));
+    });
+    container.appendChild(submitBtn);
+
+    const resendBtn = document.createElement("button");
+    resendBtn.textContent = t("auth.verify.resendBtn");
+    resendBtn.style.marginBottom = "10px";
+    resendBtn.addEventListener("click", async () => {
+      resendBtn.disabled = true;
+      await accountAuth.resendCode(this._pendingUserId);
+      resendBtn.disabled = false;
+    });
+    container.appendChild(resendBtn);
+  }
+
   _refreshSelection() {
     const current = this.getAppThemeId();
     this.cards.forEach(({ id, el }) => el.classList.toggle("selected", id === current));
@@ -413,6 +698,7 @@ export class SoftwareSettings {
   open() {
     this._refreshSelection();
     this._refreshers.forEach((refresh) => refresh());
+    this._renderAccountTab();
     this.overlayEl.classList.add("open");
   }
 

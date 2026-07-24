@@ -63,6 +63,8 @@ let currentAppTheme = DEFAULT_APP_THEME_ID;
 let currentDisplayMode = DEFAULT_DISPLAY_MODE;
 let currentPreviewFps = DEFAULT_PREVIEW_FPS;
 let currentTutorialSeen = false;
+let currentAuthToken = null;
+let currentAuthUser = null;
 applyAppTheme(currentAppTheme);
 
 function debounce(fn, ms) {
@@ -74,9 +76,16 @@ function debounce(fn, ms) {
 }
 
 const scheduleAutosave = debounce(() => {
-  saveAutosave(document_, currentAppTheme, currentDisplayMode, currentPreviewFps, currentLanguage, currentTutorialSeen).catch(
-    (err) => console.error("Autosave failed:", err)
-  );
+  saveAutosave(
+    document_,
+    currentAppTheme,
+    currentDisplayMode,
+    currentPreviewFps,
+    currentLanguage,
+    currentTutorialSeen,
+    currentAuthToken,
+    currentAuthUser
+  ).catch((err) => console.error("Autosave failed:", err));
 }, 800);
 
 const statusBarEl = document.getElementById("statusBar");
@@ -222,6 +231,12 @@ const softwareSettings = new SoftwareSettings(document.getElementById("settingsO
     previewCanvas.setFps(fps);
     scheduleAutosave();
   },
+  getAuthUser: () => currentAuthUser,
+  onAuthChange: (token, user) => {
+    currentAuthToken = token;
+    currentAuthUser = user;
+    scheduleAutosave();
+  },
   getLanguage: () => currentLanguage,
   onLanguageChange: async (lang) => {
     // Shown immediately, before the async save below — otherwise the gap
@@ -243,7 +258,16 @@ const softwareSettings = new SoftwareSettings(document.getElementById("settingsO
     // assignments (no reactive re-render layer) — reloading is far simpler
     // and safer than trying to make ~300 call sites reactive, and it's a
     // deliberate, user-initiated settings change, not a routine action.
-    await saveAutosave(document_, currentAppTheme, currentDisplayMode, currentPreviewFps, currentLanguage, currentTutorialSeen);
+    await saveAutosave(
+      document_,
+      currentAppTheme,
+      currentDisplayMode,
+      currentPreviewFps,
+      currentLanguage,
+      currentTutorialSeen,
+      currentAuthToken,
+      currentAuthUser
+    );
     window.location.reload();
   },
 });
@@ -406,6 +430,8 @@ async function hideLanguageSwitchOverlayIfNeeded() {
       previewCanvas.setFps(currentPreviewFps);
     }
     currentTutorialSeen = restored.tutorialSeen === true;
+    currentAuthToken = restored.authToken || null;
+    currentAuthUser = restored.authUser || null;
     loadDocumentIntoUi();
     setStatus(t("status.restored"));
   } catch (err) {
