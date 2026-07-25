@@ -1,0 +1,682 @@
+/* Vorlagen-Studio — "Gestalten / Design" mode.
+   Warm, soft, glow-driven workspace. See design handoff (screen 2b) for the
+   full spec this file implements. Tokens below match --ts-* names from that
+   handoff 1:1 for traceability. */
+
+#templateStudioOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 3, 8, 0.9);
+  display: none;
+  z-index: 60;
+}
+#templateStudioOverlay.open {
+  display: flex;
+}
+
+.ts-shell {
+  --ts-bg: #100a16;
+  --ts-chrome: #180f20;
+  --ts-rail: #150d1c;
+  --ts-border: #2a1b36;
+  --ts-border-strong: #3d2750;
+  --ts-text: #f5eaff;
+  --ts-text-2: #e4d2f2;
+  --ts-text-2b: #c9b3d9;
+  --ts-text-dim: #a48cb8;
+  --ts-text-faint: #8b769d;
+  --ts-accent: #c56bff;
+  --ts-accent-2: #ff3d8b;
+  --ts-accent-soft: rgba(197, 107, 255, 0.16);
+  --ts-glow: rgba(197, 107, 255, 0.13);
+  --ts-danger: #ff8fa8;
+  --ts-danger-border: #3a2430;
+  --menu-bg: var(--ts-chrome);
+  --menu-border: var(--ts-border-strong);
+  --menu-text: var(--ts-text-2);
+  --menu-hover-bg: var(--ts-accent-soft);
+  --menu-icon: var(--ts-accent);
+
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--ts-bg);
+  border: 1px solid var(--ts-border);
+  font-family: "Barlow", "Segoe UI", sans-serif;
+}
+.ts-shell button {
+  font-family: inherit;
+}
+.ts-shell button:hover:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+.ts-shell input,
+.ts-shell select {
+  font-family: inherit;
+}
+.ts-mono {
+  font-family: "JetBrains Mono", "Consolas", monospace;
+}
+
+/* -- Topbar --------------------------------------------------------------- */
+
+.ts-topbar {
+  height: 60px;
+  flex: 0 0 60px;
+  background: var(--ts-chrome);
+  border-bottom: 1px solid var(--ts-border);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px;
+}
+.ts-brand-glyph {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: conic-gradient(#c56bff, #ff3d8b, #ffd24c, #4fffd1, #c56bff);
+  box-shadow: 0 0 16px rgba(197, 107, 255, 0.5);
+}
+.ts-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ts-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.ts-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  color: var(--ts-text);
+  font-family: "Chakra Petch", "Bahnschrift", sans-serif;
+  text-transform: uppercase;
+}
+.ts-subtitle {
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 1.4px;
+  color: var(--ts-accent);
+  text-transform: uppercase;
+}
+.ts-divider {
+  width: 1px;
+  height: 26px;
+  background: var(--ts-border);
+  flex-shrink: 0;
+}
+.ts-name-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.ts-name-input {
+  width: 230px;
+  background: var(--ts-bg);
+  border: 1px solid var(--ts-border-strong);
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: var(--ts-text);
+  font-weight: 600;
+  font-size: 13px;
+}
+.ts-palette-strip {
+  width: 230px;
+  height: 4px;
+  border-radius: 2px;
+}
+.ts-lock-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 179, 71, 0.12);
+  border: 1px solid rgba(255, 179, 71, 0.4);
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+.ts-lock-badge-icon {
+  font-size: 13px;
+}
+.ts-lock-badge-text {
+  font-size: 11.5px;
+  color: #ffd9a8;
+}
+.ts-spacer {
+  flex: 1;
+}
+.ts-btn-close {
+  background: none;
+  border: 1px solid var(--ts-border-strong);
+  border-radius: 8px;
+  color: var(--ts-text-dim);
+  font-weight: 600;
+  font-size: 12.5px;
+  padding: 8px 14px;
+}
+.ts-btn-close:hover:not(:disabled) {
+  border-color: var(--ts-danger-border);
+  color: var(--ts-danger);
+}
+.ts-btn-primary {
+  background: linear-gradient(120deg, #c56bff, #ff3d8b);
+  border: none;
+  border-radius: 8px;
+  color: #1a0a20;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.4px;
+  padding: 10px 18px;
+  box-shadow: 0 6px 20px rgba(197, 107, 255, 0.35);
+}
+.ts-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+  box-shadow: 0 8px 24px rgba(197, 107, 255, 0.45);
+}
+
+/* -- Body ------------------------------------------------------------------ */
+
+.ts-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+/* -- Canvas area -------------------------------------------------------- */
+
+.ts-canvas-area {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 30px;
+  background: radial-gradient(ellipse 70% 60% at 50% 40%, var(--ts-glow), transparent 70%),
+    var(--ts-bg);
+}
+.ts-canvas-wrap {
+  position: relative;
+  height: 100%;
+  aspect-ratio: 1400 / 1750;
+  max-width: 100%;
+  max-height: 100%;
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--ts-border);
+}
+.ts-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+}
+.ts-overlay-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* -- Selection: glow ring, handles on hover only --------------------------- */
+
+.ts-handle {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: auto;
+  cursor: move;
+  border-radius: 10px;
+}
+.ts-handle.selected {
+  box-shadow: 0 0 0 2px rgba(197, 107, 255, 0.9), 0 0 34px 6px rgba(197, 107, 255, 0.45);
+  transition: box-shadow 0.18s ease;
+}
+.ts-handle-resize,
+.ts-handle-rotate {
+  position: absolute;
+  display: none;
+}
+.ts-handle.selected:hover .ts-handle-resize,
+.ts-handle.selected:hover .ts-handle-rotate {
+  display: block;
+}
+.ts-handle-resize {
+  width: 14px;
+  height: 14px;
+  margin: -7px;
+  background: var(--ts-accent);
+  border: 2px solid #100a16;
+  border-radius: 50%;
+}
+.ts-handle-resize.nw {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+.ts-handle-resize.ne {
+  top: 0;
+  left: 100%;
+  cursor: nesw-resize;
+}
+.ts-handle-resize.sw {
+  top: 100%;
+  left: 0;
+  cursor: nesw-resize;
+}
+.ts-handle-resize.se {
+  top: 100%;
+  left: 100%;
+  cursor: nwse-resize;
+}
+.ts-handle-rotate {
+  top: -32px;
+  left: 50%;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  background: var(--ts-accent);
+  border: 2px solid #100a16;
+  border-radius: 50%;
+  cursor: grab;
+}
+
+.ts-selection-pill {
+  position: absolute;
+  display: none;
+  align-items: center;
+  gap: 8px;
+  transform: translateY(-30px);
+  background: rgba(24, 15, 32, 0.95);
+  border: 1px solid var(--ts-border-strong);
+  border-radius: 999px;
+  padding: 5px 12px 5px 8px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  z-index: 5;
+}
+.ts-selection-pill.visible {
+  display: flex;
+}
+.ts-selection-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ts-accent);
+  flex-shrink: 0;
+}
+.ts-selection-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ts-text);
+  white-space: nowrap;
+}
+.ts-selection-sep {
+  width: 1px;
+  height: 13px;
+  background: var(--ts-border-strong);
+}
+.ts-selection-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 11.5px;
+  color: var(--ts-accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ts-add-buttons {
+  position: absolute;
+  left: 30px;
+  bottom: 26px;
+  display: flex;
+  gap: 8px;
+  z-index: 4;
+}
+.ts-add-btn {
+  background: rgba(24, 15, 32, 0.9);
+  border: 1px solid var(--ts-border);
+  border-radius: 8px;
+  color: var(--ts-text-2b);
+  font-weight: 600;
+  font-size: 12px;
+  padding: 8px 12px;
+}
+.ts-add-btn:hover:not(:disabled) {
+  border-color: var(--ts-accent);
+  color: var(--ts-text);
+}
+
+/* -- Icon rail -------------------------------------------------------------- */
+
+.ts-icon-rail {
+  width: 72px;
+  min-width: 72px;
+  background: var(--ts-rail);
+  border-left: 1px solid var(--ts-border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 14px 0;
+  gap: 6px;
+}
+.ts-tab {
+  width: 56px;
+  padding: 10px 0;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 1px solid transparent;
+}
+.ts-tab-glyph {
+  font-size: 16px;
+  color: var(--ts-text-dim);
+}
+.ts-tab-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--ts-text-dim);
+  text-transform: uppercase;
+}
+.ts-tab:hover:not(:disabled) .ts-tab-glyph,
+.ts-tab:hover:not(:disabled) .ts-tab-label {
+  color: var(--ts-text);
+}
+.ts-tab.active {
+  background: var(--ts-accent-soft);
+  box-shadow: inset 0 0 0 1px rgba(197, 107, 255, 0.45);
+}
+.ts-tab.active .ts-tab-glyph,
+.ts-tab.active .ts-tab-label {
+  color: var(--ts-text);
+}
+
+/* -- Tool panel --------------------------------------------------------- */
+
+.ts-tool-panel {
+  width: 392px;
+  min-width: 392px;
+  background: var(--ts-chrome);
+  border-left: 1px solid var(--ts-border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.ts-panel-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+.ts-panel-tab {
+  display: none;
+}
+.ts-panel-tab.active {
+  display: block;
+}
+.ts-panel-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--ts-text);
+  margin-bottom: 6px;
+}
+.ts-panel-desc {
+  font-size: 12px;
+  color: var(--ts-text-faint);
+  line-height: 1.5;
+  text-wrap: pretty;
+  margin: 0 0 18px;
+}
+.ts-section-header {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--ts-accent);
+  text-transform: uppercase;
+  margin: 18px 0 10px;
+}
+.ts-section-header:first-child {
+  margin-top: 0;
+}
+
+.ts-swatch-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.ts-swatch-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--ts-bg);
+  border: 1px solid var(--ts-border);
+  border-radius: 10px;
+  padding: 9px 10px;
+  cursor: pointer;
+}
+.ts-swatch-card:hover,
+.ts-swatch-card:focus-within {
+  border-color: rgba(197, 107, 255, 0.45);
+}
+.ts-swatch-color {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  cursor: pointer;
+}
+.ts-swatch-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.ts-swatch-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--ts-text);
+}
+.ts-swatch-hex {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10.5px;
+  color: var(--ts-text-faint);
+  text-transform: uppercase;
+}
+
+.ts-segmented {
+  display: inline-flex;
+  background: var(--ts-bg);
+  border: 1px solid var(--ts-border);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+}
+.ts-segment {
+  background: none;
+  border: none;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  color: var(--ts-text-faint);
+}
+.ts-segment.active {
+  color: var(--ts-text);
+  background: var(--ts-accent-soft);
+}
+
+.ts-gradient-bar {
+  position: relative;
+  height: 38px;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px var(--ts-border-strong);
+  margin: 14px 0 20px;
+  cursor: pointer;
+}
+.ts-gradient-stop {
+  position: absolute;
+  bottom: -6px;
+  width: 14px;
+  height: 14px;
+  transform: translateX(-50%) rotate(45deg);
+  box-shadow: 0 0 0 2px var(--ts-text);
+  cursor: grab;
+}
+.ts-gradient-stop.dragging {
+  cursor: grabbing;
+}
+.ts-gradient-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.ts-gradient-hint {
+  font-size: 11.5px;
+  color: var(--ts-text-faint);
+}
+.ts-angle-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--ts-bg);
+  border: 1px solid var(--ts-border);
+  border-radius: 7px;
+  padding: 5px 9px;
+  flex-shrink: 0;
+}
+.ts-angle-chip label {
+  font-size: 11px;
+  color: var(--ts-text-faint);
+}
+.ts-angle-chip input {
+  width: 40px;
+  background: none;
+  border: none;
+  outline: none;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11.5px;
+  color: var(--ts-text);
+}
+
+.ts-texture-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.ts-texture-tile {
+  flex: 1;
+  height: 52px;
+  border-radius: 9px;
+  box-shadow: inset 0 0 0 1px var(--ts-border-strong);
+  border: none;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 5px;
+  cursor: pointer;
+}
+.ts-texture-tile.active {
+  box-shadow: inset 0 0 0 2px var(--ts-accent);
+}
+.ts-texture-tile-label {
+  font-size: 10px;
+  color: var(--ts-text-faint);
+}
+.ts-texture-tile.active .ts-texture-tile-label {
+  color: var(--ts-text);
+}
+
+.ts-opacity-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.ts-opacity-row label {
+  font-size: 12px;
+  color: var(--ts-text-faint);
+  width: 82px;
+  flex-shrink: 0;
+}
+.ts-opacity-row input[type="range"] {
+  flex: 1;
+  accent-color: var(--ts-accent);
+}
+.ts-opacity-row .ts-opacity-value {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11.5px;
+  color: var(--ts-text);
+  width: 34px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.ts-panel-foot {
+  border-top: 1px solid var(--ts-border);
+  padding: 14px 20px;
+  display: flex;
+  gap: 8px;
+}
+.ts-btn-save {
+  flex: 1;
+  background: var(--ts-bg);
+  border: 1px solid var(--ts-border-strong);
+  border-radius: 8px;
+  color: var(--ts-text-2);
+  font-weight: 600;
+  font-size: 12.5px;
+  padding: 10px 0;
+}
+.ts-btn-save:hover:not(:disabled) {
+  border-color: var(--ts-accent);
+  color: var(--ts-text);
+}
+.ts-btn-export {
+  background: var(--ts-bg);
+  border: 1px solid var(--ts-border-strong);
+  border-radius: 8px;
+  color: var(--ts-text-2);
+  font-weight: 600;
+  font-size: 12.5px;
+  padding: 10px 14px;
+}
+.ts-btn-export:hover:not(:disabled) {
+  border-color: var(--ts-accent);
+  color: var(--ts-text);
+}
+.ts-btn-delete-icon {
+  background: none;
+  border: 1px solid var(--ts-danger-border);
+  color: var(--ts-danger);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.ts-btn-delete-icon:hover:not(:disabled) {
+  background: rgba(255, 143, 168, 0.12);
+}
+
+/* -- Disabled / focus states ---------------------------------------------- */
+
+.ts-shell button:disabled,
+.ts-shell input:disabled,
+.ts-shell select:disabled {
+  color: #6b5578;
+  border-color: var(--ts-border);
+  cursor: not-allowed;
+}
+.ts-shell button:focus-visible,
+.ts-shell input:focus-visible,
+.ts-shell select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(197, 107, 255, 0.45);
+}

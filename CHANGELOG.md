@@ -2,6 +2,11 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.17] - 2026-07-25
+
+### Changed
+- Redesigned the Layout Editor and Template Studio so they finally look like two different tools instead of near-twins. The Layout Editor is now a cool, technical "Arrange" workspace — a blueprint grid, a real layers panel with drag-to-reorder and expandable day-card time rows, a floating position/size HUD, and a bottom transform bar with alignment buttons. Template Studio is now a warm "Design" workspace — a five-tab icon rail (Colors/Type/Ground/Element/Stickers), color swatch cards, a draggable multi-stop gradient bar, and procedural texture preview tiles. Every existing capability (drag/resize/rotate, per-element style overrides, animation, shadows, save/export/import to the library or Streamplan Hub) still works exactly as before — only the chrome changed.
+
 ## [1.0.16] - 2026-07-24
 
 ### Added

@@ -2,13 +2,18 @@
 // split across two places — the sidebar's "Template Customize" tab (global
 // style: colors, fonts, background, images) and the standalone Layout
 // Editor (drag/resize/rotate the 9+ canvas elements) — into ONE overlay with
-// a live canvas in the middle and two sidebar tabs ("Style" for the global
-// template, "Element" for whatever's selected on the canvas). Also home to
-// design tools that don't exist anywhere else: a multi-stop gradient editor,
-// procedural background textures, and per-element drop shadows.
+// a live canvas in the middle and an icon tab rail + tool panel on the right
+// (FARBEN/SCHRIFT/GRUND/ELEMENT/STICKER). Also home to design tools that
+// don't exist anywhere else: a multi-stop gradient editor, procedural
+// background textures, and per-element drop shadows.
 // The draft is a deep-cloned working copy at all times — nothing here ever
-// touches the live document style until "Apply to Project" (or a library
-// Save/Export) is explicitly clicked.
+// touches the live document style until "Auf Projekt anwenden" (or a
+// library Save/Export) is explicitly clicked.
+//
+// UI shell: the "Gestalten / Design" mode — a warm, glow-driven workspace
+// styled entirely via styles/templateStudio.css's .ts-* classes,
+// deliberately distinct from the Layout Editor's cool "Anordnen" mode (see
+// layoutEditor.js).
 import { CANVAS_WIDTH, CANVAS_HEIGHT, DAY_NAMES, TEMPLATE_FILE_EXTENSION } from "../../shared/constants.js";
 import { createStreamerProfile, createDayEntry } from "../models/schedule.js";
 import { renderStreamplan } from "../rendering/renderer.js";
@@ -28,12 +33,12 @@ import { customBaseStyle } from "../models/templates.js";
 import { addCustomTemplate, updateCustomTemplate, removeCustomTemplate, getCustomTemplate, isCustomTemplateId } from "../models/customTemplateLibrary.js";
 import { listCustomLayouts, getCustomLayout } from "../models/customLayoutLibrary.js";
 import {
+  colorLabels,
   cornerLabels,
   bgModeLabels,
   backgroundAnimLabels,
   buildSelectRow,
   buildFontSelectRow,
-  buildColorRow,
   buildCustomImageEditor,
 } from "./stylePanel.js";
 import { buildSliderRow } from "./formControls.js";
@@ -99,6 +104,18 @@ function backgroundTextureLabels() {
     grid: t("templateStudio.textureGrid"),
   };
 }
+// CSS-only preview patterns for the texture tiles — the real procedural
+// texture rendering stays entirely in rendering/renderer.js; these are just
+// a visual hint of what each option looks like.
+const TEXTURE_PREVIEWS = {
+  grain: { image: "radial-gradient(rgba(255,255,255,.22) .5px, transparent .5px)", size: "3px 3px" },
+  dots: { image: "radial-gradient(rgba(255,255,255,.28) 1.2px, transparent 1.2px)", size: "8px 8px" },
+  diagonal: { image: "repeating-linear-gradient(45deg, rgba(255,255,255,.16) 0 1px, transparent 1px 7px)", size: null },
+  grid: {
+    image: "linear-gradient(rgba(255,255,255,.16) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.16) 1px, transparent 1px)",
+    size: "8px 8px",
+  },
+};
 const ANIM_TICK_MS = 1000 / 30;
 
 // All 7 days populated (unlike the 3-day gallery-thumbnail sample) so every
@@ -167,9 +184,9 @@ export class TemplateStudio {
     this.overlayEl = overlayEl;
     this.onApplyToProject = onApplyToProject || null;
     // A real (not null) placeholder before the first open() — _build() runs
-    // synchronously below and several row-builders (e.g. stylePanel.js's
-    // buildColorRow) read the current style immediately to set their
-    // initial displayed value, not just lazily on change.
+    // synchronously below and several row-builders (e.g. the swatch cards)
+    // read the current style immediately to set their initial displayed
+    // value, not just lazily on change.
     this._draftStyle = customBaseStyle();
     this._draftStyle.customLayout = { elements: buildDefaultCustomLayoutElements() };
     this._onClose = null;
@@ -177,6 +194,7 @@ export class TemplateStudio {
     this._selectedId = null;
     this._handleEls = new Map();
     this._styleRefreshers = [];
+    this._activeToolTab = "colors";
     this._build();
   }
 
@@ -195,28 +213,158 @@ export class TemplateStudio {
   _build() {
     this.overlayEl.innerHTML = "";
     const shell = document.createElement("div");
-    shell.className = "layout-editor-shell";
+    shell.className = "ts-shell";
+    this._lockableEls = [];
 
-    // -- Toolbar ------------------------------------------------------
-    const toolbar = document.createElement("div");
-    toolbar.className = "layout-editor-toolbar";
+    shell.appendChild(this._buildTopbar());
 
+    const body = document.createElement("div");
+    body.className = "ts-body";
+    body.appendChild(this._buildCanvasArea());
+    body.appendChild(this._buildIconRail());
+    body.appendChild(this._buildToolPanel());
+    shell.appendChild(body);
+
+    this.overlayEl.appendChild(shell);
+    this.shellEl = shell;
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && this.overlayEl.classList.contains("open")) this.close();
+    });
+  }
+
+  // -- Topbar -----------------------------------------------------------
+
+  _buildTopbar() {
+    const topbar = document.createElement("div");
+    topbar.className = "ts-topbar";
+    this.topbarEl = topbar;
+
+    const brand = document.createElement("div");
+    brand.className = "ts-brand";
+    const glyph = document.createElement("div");
+    glyph.className = "ts-brand-glyph";
+    const brandText = document.createElement("div");
+    brandText.className = "ts-brand-text";
     const title = document.createElement("div");
-    title.className = "layout-editor-title";
+    title.className = "ts-title";
     title.textContent = t("templateStudio.title");
-    toolbar.appendChild(title);
+    const subtitle = document.createElement("div");
+    subtitle.className = "ts-subtitle";
+    subtitle.textContent = t("templateStudio.modeSubtitle");
+    brandText.append(title, subtitle);
+    brand.append(glyph, brandText);
+    topbar.appendChild(brand);
+
+    const divider = document.createElement("div");
+    divider.className = "ts-divider";
+    topbar.appendChild(divider);
+
+    const nameWrap = document.createElement("div");
+    nameWrap.className = "ts-name-wrap";
+    this.nameInput = document.createElement("input");
+    this.nameInput.type = "text";
+    this.nameInput.className = "ts-name-input";
+    this.nameInput.placeholder = t("style.templateNamePlaceholder");
+    this.paletteStripEl = document.createElement("div");
+    this.paletteStripEl.className = "ts-palette-strip";
+    nameWrap.append(this.nameInput, this.paletteStripEl);
+    topbar.appendChild(nameWrap);
+
+    this.lockBadge = document.createElement("div");
+    this.lockBadge.className = "ts-lock-badge";
+    this.lockBadge.style.display = "none";
+    const lockIcon = document.createElement("span");
+    lockIcon.className = "ts-lock-badge-icon";
+    lockIcon.textContent = "🔒";
+    const lockText = document.createElement("span");
+    lockText.className = "ts-lock-badge-text";
+    lockText.textContent = t("templateStudio.lockedBadge");
+    this.lockBadge.append(lockIcon, lockText);
+    topbar.appendChild(this.lockBadge);
+
+    const spacer = document.createElement("div");
+    spacer.className = "ts-spacer";
+    topbar.appendChild(spacer);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "ts-btn-close";
+    closeBtn.textContent = t("layoutEditor.closeBtn");
+    closeBtn.addEventListener("click", () => this.close());
+    topbar.appendChild(closeBtn);
+
+    this.applyBtn = document.createElement("button");
+    this.applyBtn.className = "ts-btn-primary";
+    this.applyBtn.textContent = t("templateStudio.applyBtn");
+    this.applyBtn.addEventListener("click", () => {
+      if (this.onApplyToProject) this.onApplyToProject(cloneStyle(this._draftStyle));
+      this.close();
+    });
+    topbar.appendChild(this.applyBtn);
+
+    return topbar;
+  }
+
+  // -- Canvas area --------------------------------------------------------
+
+  _buildCanvasArea() {
+    const area = document.createElement("div");
+    area.className = "ts-canvas-area";
+
+    this.canvasWrap = document.createElement("div");
+    this.canvasWrap.className = "ts-canvas-wrap";
+
+    this.canvasEl = document.createElement("canvas");
+    this.canvasEl.className = "ts-canvas";
+    this.canvasWrap.appendChild(this.canvasEl);
+
+    this.overlayLayer = document.createElement("div");
+    this.overlayLayer.className = "ts-overlay-layer";
+    this.canvasWrap.appendChild(this.overlayLayer);
+
+    this.selectionPillEl = document.createElement("div");
+    this.selectionPillEl.className = "ts-selection-pill";
+    const dot = document.createElement("span");
+    dot.className = "ts-selection-dot";
+    this.selectionNameEl = document.createElement("span");
+    this.selectionNameEl.className = "ts-selection-name";
+    const sep = document.createElement("span");
+    sep.className = "ts-selection-sep";
+    const link = document.createElement("button");
+    link.className = "ts-selection-link";
+    link.type = "button";
+    link.textContent = t("templateStudio.designElementLink");
+    link.addEventListener("click", () => this._activateToolTab("element"));
+    this.selectionPillEl.append(dot, this.selectionNameEl, sep, link);
+    this.canvasWrap.appendChild(this.selectionPillEl);
+
+    this.canvasWrap.addEventListener("pointerdown", (e) => {
+      if (e.target === this.canvasWrap || e.target === this.canvasEl) this._selectElement(null);
+    });
+
+    area.appendChild(this.canvasWrap);
+    area.appendChild(this._buildAddButtons());
+
+    return area;
+  }
+
+  _buildAddButtons() {
+    const wrap = document.createElement("div");
+    wrap.className = "ts-add-buttons";
 
     const addTextBtn = document.createElement("button");
+    addTextBtn.className = "ts-add-btn";
     addTextBtn.textContent = t("layoutEditor.addText");
     addTextBtn.addEventListener("click", () => this._addFreeformElement("text"));
-    this._lockableEls = [addTextBtn];
-    toolbar.appendChild(addTextBtn);
+    this._lockableEls.push(addTextBtn);
+    wrap.appendChild(addTextBtn);
 
     const shapeMenu = this._buildShapeAddMenu();
-    this._lockableEls.push(shapeMenu.querySelector(".shape-add-menu-trigger"));
-    toolbar.appendChild(shapeMenu);
+    this._lockableEls.push(shapeMenu.querySelector("button"));
+    wrap.appendChild(shapeMenu);
 
     const addImageBtn = document.createElement("button");
+    addImageBtn.className = "ts-add-btn";
     addImageBtn.textContent = t("layoutEditor.addImage");
     addImageBtn.addEventListener("click", async () => {
       let path;
@@ -230,187 +378,34 @@ export class TemplateStudio {
       this._addFreeformElement("image", { imagePath: path });
     });
     this._lockableEls.push(addImageBtn);
-    toolbar.appendChild(addImageBtn);
+    wrap.appendChild(addImageBtn);
 
-    this.lockBadge = document.createElement("div");
-    this.lockBadge.className = "field-warning";
-    this.lockBadge.style.display = "none";
-    this.lockBadge.style.margin = "0";
-    this.lockBadge.style.padding = "6px 10px";
-    this.lockBadge.innerHTML = `<span class="field-warning-icon">🔒</span><span>${t("templateStudio.lockedBadge")}</span>`;
-    toolbar.appendChild(this.lockBadge);
-
-    const spacer = document.createElement("div");
-    spacer.className = "layout-editor-toolbar-spacer";
-    toolbar.appendChild(spacer);
-
-    this.applyBtn = document.createElement("button");
-    this.applyBtn.className = "primary";
-    this.applyBtn.textContent = t("templateStudio.applyBtn");
-    this.applyBtn.addEventListener("click", () => {
-      if (this.onApplyToProject) this.onApplyToProject(cloneStyle(this._draftStyle));
-      this.close();
-    });
-    toolbar.appendChild(this.applyBtn);
-
-    const closeBtn = document.createElement("button");
-    closeBtn.textContent = t("layoutEditor.closeBtn");
-    closeBtn.addEventListener("click", () => this.close());
-    toolbar.appendChild(closeBtn);
-
-    // -- Library row (save/export/import/delete this template) --------
-    const libraryRow = document.createElement("div");
-    libraryRow.className = "layout-editor-library-row";
-
-    this.nameInput = document.createElement("input");
-    this.nameInput.type = "text";
-    this.nameInput.placeholder = t("style.templateNamePlaceholder");
-    libraryRow.appendChild(this.nameInput);
-
-    const saveBtn = document.createElement("button");
-    saveBtn.textContent = t("common.saveToLibrary");
-    saveBtn.addEventListener("click", () => {
-      const style = this._draftStyle;
-      const name = this.nameInput.value.trim() || "Custom Template";
-      if (style.templateId && style.templateId !== "custom" && isCustomTemplateId(style.templateId)) {
-        updateCustomTemplate(style.templateId, { name, style });
-      } else {
-        const entry = addCustomTemplate({ name, style });
-        style.templateId = entry.id;
-      }
-      this._loadedLibraryId = style.templateId;
-      this._refreshLibraryState();
-    });
-    libraryRow.appendChild(saveBtn);
-
-    libraryRow.appendChild(this._buildExportMenu());
-
-    const importBtn = document.createElement("button");
-    importBtn.textContent = t("common.importEllipsis");
-    importBtn.addEventListener("click", async () => {
-      let targetPath;
-      try {
-        targetPath = await window.streamplanAPI.chooseOpenTemplatePath();
-      } catch (err) {
-        await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("common.fileDialogError", { message: err.message }));
-        return;
-      }
-      if (!targetPath) return;
-      try {
-        const bytes = await window.streamplanAPI.readFile(targetPath);
-        const parsed = JSON.parse(new TextDecoder().decode(bytes));
-        if (!parsed || !parsed.style) throw new Error(t("style.invalidTemplateFile"));
-        const importedStyle = styleFromDict(parsed.style);
-        // Same rule as the sidebar's own import flow: a file from outside
-        // this session always comes in locked, regardless of what it claims.
-        importedStyle.layoutLocked = true;
-        const entry = addCustomTemplate({ name: parsed.name || "Imported Template", style: importedStyle });
-        entry.style.templateId = entry.id;
-        this._loadStyle(cloneStyle(entry.style));
-      } catch (err) {
-        console.error(err);
-        await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("style.importTemplateFailed", { message: err.message }));
-      }
-    });
-    libraryRow.appendChild(importBtn);
-
-    this.deleteLibraryBtn = document.createElement("button");
-    this.deleteLibraryBtn.className = "danger";
-    this.deleteLibraryBtn.textContent = t("common.deleteFromLibrary");
-    this.deleteLibraryBtn.addEventListener("click", () => {
-      if (!this._loadedLibraryId) return;
-      removeCustomTemplate(this._loadedLibraryId);
-      this._loadedLibraryId = null;
-      this._draftStyle.templateId = "custom";
-      this._refreshLibraryState();
-    });
-    libraryRow.appendChild(this.deleteLibraryBtn);
-
-    // Loads a reusable, elements-only Layout (saved via the standalone
-    // Layout Editor's own library — customLayoutLibrary.js, deliberately
-    // separate from this template's full style) into the current draft,
-    // replacing its elements while leaving colors/fonts/background alone. A
-    // one-shot action (not a persistent selection), so it resets to blank
-    // right after firing instead of trying to track "does the current
-    // element set match a saved layout" the way the old dropdown used to.
-    this.loadLayoutSelect = document.createElement("select");
-    this.loadLayoutSelect.title = t("templateStudio.loadLayoutTitle");
-    this.loadLayoutSelect.addEventListener("change", () => {
-      const id = this.loadLayoutSelect.value;
-      this.loadLayoutSelect.value = "";
-      if (!id || this._isLocked()) return;
-      const entry = getCustomLayout(id);
-      if (!entry) return;
-      this._draftStyle.customLayout.elements = sanitizeCustomLayout(entry.elements);
-      this._selectElement(null);
-      this._renderCanvas();
-      this._renderOverlay();
-    });
-    this._lockableEls.push(this.loadLayoutSelect);
-    libraryRow.appendChild(this.loadLayoutSelect);
-    this.libraryRowEl = libraryRow;
-
-    // -- Body: canvas + sidebar -----------------------------------------
-    const body = document.createElement("div");
-    body.className = "layout-editor-body";
-
-    const canvasArea = document.createElement("div");
-    canvasArea.className = "layout-editor-canvas-area";
-
-    this.canvasWrap = document.createElement("div");
-    this.canvasWrap.className = "layout-editor-canvas-wrap";
-
-    this.canvasEl = document.createElement("canvas");
-    this.canvasEl.className = "layout-editor-canvas";
-    this.canvasWrap.appendChild(this.canvasEl);
-
-    this.overlayLayer = document.createElement("div");
-    this.overlayLayer.className = "layout-editor-overlay-layer";
-    this.canvasWrap.appendChild(this.overlayLayer);
-
-    this.canvasWrap.addEventListener("pointerdown", (e) => {
-      if (e.target === this.canvasWrap || e.target === this.canvasEl) this._selectElement(null);
-    });
-
-    canvasArea.appendChild(this.canvasWrap);
-
-    this.sidebarEl = document.createElement("div");
-    this.sidebarEl.className = "side-scroll layout-editor-sidebar";
-    this._buildSidebar(this.sidebarEl);
-
-    body.append(canvasArea, this.sidebarEl);
-
-    shell.append(toolbar, libraryRow, body);
-    this.overlayEl.appendChild(shell);
-
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && this.overlayEl.classList.contains("open")) this.close();
-    });
+    return wrap;
   }
 
   // Same pattern as layoutEditor.js's "+ Shape" dropdown — a small custom
   // menu so a shape is added as the kind the user actually picked.
   _buildShapeAddMenu() {
     const wrap = document.createElement("div");
-    wrap.className = "shape-add-menu";
+    wrap.className = "sp-menu";
 
     const menuBtn = document.createElement("button");
-    menuBtn.className = "shape-add-menu-trigger";
+    menuBtn.className = "ts-add-btn";
     menuBtn.textContent = `${t("layoutEditor.addShape")} ▾`;
     wrap.appendChild(menuBtn);
 
     const list = document.createElement("div");
-    list.className = "shape-add-menu-list";
+    list.className = "sp-menu-list";
     list.setAttribute("role", "menu");
     list.setAttribute("aria-label", t("layoutEditor.addShapeMenuTitle"));
 
     const labels = shapeKindLabels();
     SHAPE_KINDS.forEach((kind) => {
       const item = document.createElement("button");
-      item.className = "shape-add-menu-item";
+      item.className = "sp-menu-item";
       item.type = "button";
       const icon = document.createElement("span");
-      icon.className = "shape-add-menu-item-icon";
+      icon.className = "sp-menu-item-icon";
       icon.textContent = SHAPE_KIND_ICONS[kind] || "";
       const label = document.createElement("span");
       label.textContent = labels[kind];
@@ -430,71 +425,6 @@ export class TemplateStudio {
     });
     document.addEventListener("click", (e) => {
       if (!wrap.contains(e.target)) closeMenu();
-    });
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && wrap.classList.contains("open")) {
-        e.stopPropagation();
-        closeMenu();
-      }
-    });
-
-    return wrap;
-  }
-
-  // "Export…" toolbar control: a small dropdown (same pattern as the
-  // "+ Shape" menu above) instead of a single button, so exporting can
-  // either save a local .sptemplate file or upload the template straight
-  // to Streamplan Hub.
-  _buildExportMenu() {
-    const wrap = document.createElement("div");
-    wrap.className = "shape-add-menu";
-
-    const menuBtn = document.createElement("button");
-    menuBtn.className = "shape-add-menu-trigger";
-    menuBtn.textContent = `${t("common.exportEllipsis")} ▾`;
-    wrap.appendChild(menuBtn);
-    this._exportMenuBtn = menuBtn;
-
-    const list = document.createElement("div");
-    list.className = "shape-add-menu-list";
-    list.setAttribute("role", "menu");
-    list.setAttribute("aria-label", t("common.exportEllipsis"));
-
-    const localItem = document.createElement("button");
-    localItem.className = "shape-add-menu-item";
-    localItem.type = "button";
-    localItem.textContent = t("common.exportLocalOption");
-    localItem.addEventListener("click", () => {
-      closeMenu();
-      this._exportLocal();
-    });
-    list.appendChild(localItem);
-
-    const uploadItem = document.createElement("button");
-    uploadItem.className = "shape-add-menu-item";
-    uploadItem.type = "button";
-    uploadItem.textContent = t("common.exportUploadOption");
-    uploadItem.addEventListener("click", () => {
-      closeMenu();
-      this._uploadToHub();
-    });
-    list.appendChild(uploadItem);
-
-    wrap.appendChild(list);
-
-    const closeMenu = () => wrap.classList.remove("open");
-    menuBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      wrap.classList.toggle("open");
-    });
-    document.addEventListener("click", (e) => {
-      if (!wrap.contains(e.target)) closeMenu();
-    });
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && wrap.classList.contains("open")) {
-        e.stopPropagation();
-        closeMenu();
-      }
     });
 
     return wrap;
@@ -534,9 +464,11 @@ export class TemplateStudio {
       await window.streamplanAPI.showMessage("error", t("common.uploadNoNameTitle"), t("common.uploadNoNameError"));
       return;
     }
-    const prevText = this._exportMenuBtn.textContent;
-    this._exportMenuBtn.disabled = true;
-    this._exportMenuBtn.textContent = t("common.uploadingEllipsis");
+    const prevText = this._exportMenuBtn ? this._exportMenuBtn.textContent : "";
+    if (this._exportMenuBtn) {
+      this._exportMenuBtn.disabled = true;
+      this._exportMenuBtn.textContent = t("common.uploadingEllipsis");
+    }
     try {
       const payload = { name, style: styleToDict(this._draftStyle) };
       const bytes = new TextEncoder().encode(JSON.stringify(payload, null, 2));
@@ -549,87 +481,429 @@ export class TemplateStudio {
       console.error(err);
       await window.streamplanAPI.showMessage("error", t("common.uploadFailedTitle"), err.message);
     } finally {
-      this._exportMenuBtn.disabled = false;
-      this._exportMenuBtn.textContent = prevText;
+      if (this._exportMenuBtn) {
+        this._exportMenuBtn.disabled = false;
+        this._exportMenuBtn.textContent = prevText;
+      }
     }
   }
 
-  // Two mini-tabs sharing the sidebar: "Style" (the whole template's global
-  // look) and "Element" (whatever's selected on the canvas, or a hint when
-  // nothing is). Selecting/deselecting on the canvas auto-switches between
-  // them (see _selectElement) so the sidebar always shows what's relevant
-  // without the user having to manually flip tabs.
-  _buildSidebar(container) {
-    const miniTabs = document.createElement("div");
-    miniTabs.className = "mini-tabs";
-    container.appendChild(miniTabs);
-
-    const panelsWrap = document.createElement("div");
-    container.appendChild(panelsWrap);
-
-    const stylePanelEl = document.createElement("div");
-    stylePanelEl.className = "mini-tab-panel active";
-    const elementPanelEl = document.createElement("div");
-    elementPanelEl.className = "mini-tab-panel";
-    panelsWrap.append(stylePanelEl, elementPanelEl);
-
-    const styleBtn = document.createElement("button");
-    styleBtn.className = "mini-tab-btn active";
-    styleBtn.textContent = t("templateStudio.tabStyle");
-    const elementBtn = document.createElement("button");
-    elementBtn.className = "mini-tab-btn";
-    elementBtn.textContent = t("templateStudio.tabElement");
-    miniTabs.append(styleBtn, elementBtn);
-
-    this._sidebarTabBtns = { style: styleBtn, element: elementBtn };
-    this._sidebarTabPanels = { style: stylePanelEl, element: elementPanelEl };
-    styleBtn.addEventListener("click", () => this._activateSidebarTab("style"));
-    elementBtn.addEventListener("click", () => this._activateSidebarTab("element"));
-
-    this._buildStyleTab(stylePanelEl);
-    this._buildElementTab(elementPanelEl);
+  async _importTemplate() {
+    let targetPath;
+    try {
+      targetPath = await window.streamplanAPI.chooseOpenTemplatePath();
+    } catch (err) {
+      await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("common.fileDialogError", { message: err.message }));
+      return;
+    }
+    if (!targetPath) return;
+    try {
+      const bytes = await window.streamplanAPI.readFile(targetPath);
+      const parsed = JSON.parse(new TextDecoder().decode(bytes));
+      if (!parsed || !parsed.style) throw new Error(t("style.invalidTemplateFile"));
+      const importedStyle = styleFromDict(parsed.style);
+      // Same rule as the sidebar's own import flow: a file from outside
+      // this session always comes in locked, regardless of what it claims.
+      importedStyle.layoutLocked = true;
+      const entry = addCustomTemplate({ name: parsed.name || "Imported Template", style: importedStyle });
+      entry.style.templateId = entry.id;
+      this._loadStyle(cloneStyle(entry.style));
+    } catch (err) {
+      console.error(err);
+      await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("style.importTemplateFailed", { message: err.message }));
+    }
   }
 
-  _activateSidebarTab(id) {
-    Object.entries(this._sidebarTabBtns).forEach(([tid, btn]) => btn.classList.toggle("active", tid === id));
-    Object.entries(this._sidebarTabPanels).forEach(([tid, panel]) => panel.classList.toggle("active", tid === id));
-  }
+  // -- Icon rail ------------------------------------------------------------
 
-  // -- Style tab: the whole template's global look ------------------------
-  // A near-direct port of stylePanel.js's _appendStyleControls, minus the
-  // Layout Style dropdown (superseded here by editing elements directly on
-  // the canvas), plus the two new sections this feature adds.
-  _buildStyleTab(panel) {
-    const getStyle = () => this._draftStyle;
-    const onStyleChange = () => this._renderCanvas();
+  _buildIconRail() {
+    const rail = document.createElement("div");
+    rail.className = "ts-icon-rail";
+    this.iconRailEl = rail;
 
-    const colorsHeader = document.createElement("div");
-    colorsHeader.className = "section-header";
-    colorsHeader.textContent = t("style.colorsHeader");
-    panel.appendChild(colorsHeader);
-
-    COLOR_KEYS.forEach((key) => {
-      const row = buildColorRow(key, getStyle, onStyleChange);
-      panel.appendChild(row.el);
-      this._styleRefreshers.push(row.refresh);
+    const defs = [
+      ["colors", "◐", "templateStudio.tabColors"],
+      ["type", "Aa", "templateStudio.tabType"],
+      ["ground", "▧", "templateStudio.tabGround"],
+      ["element", "◈", "templateStudio.tabElementShort"],
+      ["stickers", "✦", "templateStudio.tabStickers"],
+    ];
+    this._tabBtns = {};
+    defs.forEach(([key, glyph, labelKey]) => {
+      const tab = document.createElement("button");
+      tab.className = "ts-tab";
+      const g = document.createElement("span");
+      g.className = "ts-tab-glyph";
+      g.textContent = glyph;
+      const l = document.createElement("span");
+      l.className = "ts-tab-label";
+      l.textContent = t(labelKey);
+      tab.append(g, l);
+      tab.addEventListener("click", () => this._activateToolTab(key));
+      rail.appendChild(tab);
+      this._tabBtns[key] = tab;
     });
 
-    const uploadHint = document.createElement("div");
-    uploadHint.className = "field-hint";
-    uploadHint.textContent = t("templateStudio.uploadElsewhereHint");
-    panel.appendChild(uploadHint);
+    return rail;
+  }
 
-    const fontsHeader = document.createElement("div");
-    fontsHeader.className = "section-header";
-    fontsHeader.textContent = t("style.fontsHeader");
-    panel.appendChild(fontsHeader);
+  _activateToolTab(key) {
+    this._activeToolTab = key;
+    Object.entries(this._tabBtns).forEach(([k, btn]) => btn.classList.toggle("active", k === key));
+    Object.entries(this._tabPanels).forEach(([k, panel]) => panel.classList.toggle("active", k === key));
+  }
+
+  // -- Tool panel -------------------------------------------------------
+
+  _buildToolPanel() {
+    const panel = document.createElement("div");
+    panel.className = "ts-tool-panel";
+    this.toolPanelEl = panel;
+
+    const content = document.createElement("div");
+    content.className = "ts-panel-content";
+    this._tabPanels = {};
+    const colorsTab = document.createElement("div");
+    colorsTab.className = "ts-panel-tab active";
+    this._buildColorsTab(colorsTab);
+    this._tabPanels.colors = colorsTab;
+
+    const typeTab = document.createElement("div");
+    typeTab.className = "ts-panel-tab";
+    this._buildTypeTab(typeTab);
+    this._tabPanels.type = typeTab;
+
+    const groundTab = document.createElement("div");
+    groundTab.className = "ts-panel-tab";
+    this._buildGroundTab(groundTab);
+    this._tabPanels.ground = groundTab;
+
+    const elementTab = document.createElement("div");
+    elementTab.className = "ts-panel-tab";
+    this._buildElementTab(elementTab);
+    this._tabPanels.element = elementTab;
+
+    const stickersTab = document.createElement("div");
+    stickersTab.className = "ts-panel-tab";
+    this._buildStickersTab(stickersTab);
+    this._tabPanels.stickers = stickersTab;
+
+    content.append(colorsTab, typeTab, groundTab, elementTab, stickersTab);
+    panel.appendChild(content);
+    this.panelFootEl = this._buildPanelFoot();
+    panel.appendChild(this.panelFootEl);
+
+    return panel;
+  }
+
+  _panelTitle(container, titleText, hintText) {
+    const title = document.createElement("div");
+    title.className = "ts-panel-title";
+    title.textContent = titleText;
+    container.appendChild(title);
+    if (hintText) {
+      const desc = document.createElement("div");
+      desc.className = "ts-panel-desc";
+      desc.textContent = hintText;
+      container.appendChild(desc);
+    }
+  }
+
+  _sectionHeader(container, text) {
+    const header = document.createElement("div");
+    header.className = "ts-section-header";
+    header.textContent = text;
+    container.appendChild(header);
+    return header;
+  }
+
+  // -- FARBEN tab -----------------------------------------------------------
+
+  _buildColorsTab(panel) {
+    this._panelTitle(panel, t("templateStudio.colorsTitle"), t("templateStudio.colorsHint"));
+
+    const grid = document.createElement("div");
+    grid.className = "ts-swatch-grid";
+    const labels = colorLabels();
+    COLOR_KEYS.forEach((key) => {
+      const card = document.createElement("div");
+      card.className = "ts-swatch-card";
+      const colorInput = document.createElement("input");
+      colorInput.type = "color";
+      colorInput.className = "ts-swatch-color";
+      const info = document.createElement("div");
+      info.className = "ts-swatch-info";
+      const name = document.createElement("div");
+      name.className = "ts-swatch-name";
+      name.textContent = labels[key] || key;
+      const hex = document.createElement("div");
+      hex.className = "ts-swatch-hex";
+      info.append(name, hex);
+      colorInput.addEventListener("input", () => {
+        this._draftStyle.colors[key] = colorInput.value;
+        hex.textContent = colorInput.value.toUpperCase();
+        this._onStyleChange();
+      });
+      card.append(colorInput, info);
+      grid.appendChild(card);
+      const refresh = () => {
+        const value = this._draftStyle.colors[key] || "#000000";
+        colorInput.value = value;
+        hex.textContent = value.toUpperCase();
+      };
+      refresh();
+      this._styleRefreshers.push(refresh);
+    });
+    panel.appendChild(grid);
+
+    this._sectionHeader(panel, t("style.backgroundLabel"));
+    const { el: segEl, refresh: segRefresh } = this._buildSegmented(
+      bgModeLabels(),
+      () => this._draftStyle.backgroundMode,
+      (value) => {
+        this._draftStyle.backgroundMode = value;
+        this._onStyleChange();
+        this._refreshGradientSection();
+        this._refreshTextureTiles();
+      }
+    );
+    segEl.style.marginBottom = "14px";
+    panel.appendChild(segEl);
+    this._styleRefreshers.push(segRefresh);
+    this.bgModeRowEl = segEl;
+
+    this._buildGradientSection(panel);
+    this._buildTextureSection(panel);
+  }
+
+  _buildSegmented(options, getValue, onChange) {
+    const wrap = document.createElement("div");
+    wrap.className = "ts-segmented";
+    const buttons = {};
+    Object.entries(options).forEach(([value, label]) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "ts-segment";
+      btn.textContent = label;
+      btn.addEventListener("click", () => {
+        onChange(value);
+        refresh();
+      });
+      buttons[value] = btn;
+      wrap.appendChild(btn);
+    });
+    const refresh = () => {
+      const current = getValue();
+      Object.entries(buttons).forEach(([value, btn]) => btn.classList.toggle("active", value === current));
+    };
+    refresh();
+    return { el: wrap, refresh };
+  }
+
+  // Multi-stop gradient editor: a horizontal bar with draggable diamond
+  // stops. Drag = reposition, click (no movement) = open the stop's color
+  // picker, double-click the bar = insert a stop, right-click a stop =
+  // remove it (while more than 2 remain). Only shown once backgroundMode is
+  // "gradient" — starts with exactly 2 stops (background → backgroundEnd)
+  // the first time that mode is picked, functionally identical to the
+  // template's plain 2-color fade until a stop is actually added.
+  _buildGradientSection(panel) {
+    this.gradientSectionEl = document.createElement("div");
+
+    this._sectionHeader(this.gradientSectionEl, t("templateStudio.gradientHeader"));
+
+    this.gradientBarEl = document.createElement("div");
+    this.gradientBarEl.className = "ts-gradient-bar";
+    this.gradientBarEl.addEventListener("dblclick", (e) => {
+      const stops = this._draftStyle.backgroundGradientStops;
+      if (!stops || e.target !== this.gradientBarEl) return;
+      const rect = this.gradientBarEl.getBoundingClientRect();
+      const offset = clamp((e.clientX - rect.left) / rect.width, 0, 1);
+      const color = GRADIENT_STOP_COLORS[stops.length % GRADIENT_STOP_COLORS.length];
+      stops.push({ offset, color });
+      stops.sort((a, b) => a.offset - b.offset);
+      this._onStyleChange();
+      this._refreshGradientSection();
+    });
+    this.gradientSectionEl.appendChild(this.gradientBarEl);
+
+    const foot = document.createElement("div");
+    foot.className = "ts-gradient-foot";
+    const hint = document.createElement("div");
+    hint.className = "ts-gradient-hint";
+    hint.textContent = t("templateStudio.gradientHint");
+    const angleChip = document.createElement("div");
+    angleChip.className = "ts-angle-chip";
+    const angleLabel = document.createElement("label");
+    angleLabel.textContent = t("templateStudio.gradientAngleLabel");
+    this.gradientAngleInput = document.createElement("input");
+    this.gradientAngleInput.type = "number";
+    this.gradientAngleInput.min = "0";
+    this.gradientAngleInput.max = "360";
+    this.gradientAngleInput.step = "1";
+    this.gradientAngleInput.addEventListener("input", () => {
+      const v = Number(this.gradientAngleInput.value);
+      if (Number.isFinite(v)) {
+        this._draftStyle.backgroundGradientAngle = clamp(v, 0, 360);
+        this._onStyleChange();
+      }
+    });
+    angleChip.append(angleLabel, this.gradientAngleInput);
+    foot.append(hint, angleChip);
+    this.gradientSectionEl.appendChild(foot);
+
+    panel.appendChild(this.gradientSectionEl);
+    this._styleRefreshers.push(() => this._refreshGradientSection());
+    this._refreshGradientSection();
+  }
+
+  _refreshGradientSection() {
+    if (!this.gradientSectionEl) return;
+    const style = this._draftStyle;
+    const isGradientMode = style.backgroundMode === "gradient";
+    this.gradientSectionEl.style.display = isGradientMode ? "" : "none";
+    if (!isGradientMode) return;
+
+    if (!style.backgroundGradientStops) {
+      style.backgroundGradientStops = [
+        { offset: 0, color: style.colors.background || "#0A0A0F" },
+        { offset: 1, color: style.colors.backgroundEnd || style.colors.background || "#0A0A0F" },
+      ];
+    }
+    const stops = style.backgroundGradientStops;
+    this.gradientAngleInput.value = String(Math.round(style.backgroundGradientAngle ?? 180));
+
+    const sorted = [...stops].sort((a, b) => a.offset - b.offset);
+    this.gradientBarEl.style.background = `linear-gradient(90deg, ${sorted
+      .map((s) => `${s.color} ${(s.offset * 100).toFixed(1)}%`)
+      .join(", ")})`;
+
+    this.gradientBarEl.querySelectorAll(".ts-gradient-stop, input[type=color]").forEach((n) => n.remove());
+    stops.forEach((stop) => {
+      const diamond = document.createElement("div");
+      diamond.className = "ts-gradient-stop";
+      diamond.style.left = `${stop.offset * 100}%`;
+      diamond.style.background = stop.color;
+
+      const colorInput = document.createElement("input");
+      colorInput.type = "color";
+      colorInput.value = stop.color;
+      colorInput.style.cssText = "position:absolute;width:0;height:0;opacity:0;pointer-events:none;";
+      colorInput.addEventListener("input", () => {
+        stop.color = colorInput.value;
+        this._onStyleChange();
+        this._refreshGradientSection();
+      });
+
+      diamond.addEventListener("pointerdown", (e) => this._startGradientStopDrag(e, stop, stops, colorInput));
+      diamond.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        if (stops.length <= 2) return;
+        const idx = stops.indexOf(stop);
+        if (idx !== -1) {
+          stops.splice(idx, 1);
+          this._onStyleChange();
+          this._refreshGradientSection();
+        }
+      });
+
+      this.gradientBarEl.append(diamond, colorInput);
+    });
+  }
+
+  _startGradientStopDrag(e, stop, stops, colorInput) {
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = this.gradientBarEl.getBoundingClientRect();
+    const startX = e.clientX;
+    let moved = false;
+    const move = (ev) => {
+      if (Math.abs(ev.clientX - startX) > 3) moved = true;
+      if (!moved) return;
+      stop.offset = clamp((ev.clientX - rect.left) / rect.width, 0, 1);
+      this._onStyleChange();
+      this._refreshGradientSection();
+    };
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      if (moved) {
+        stops.sort((a, b) => a.offset - b.offset);
+        this._refreshGradientSection();
+      } else {
+        colorInput.click();
+      }
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  }
+
+  // Procedural, asset-free background texture overlay.
+  _buildTextureSection(panel) {
+    this._sectionHeader(panel, t("templateStudio.textureHeader"));
+    const row = document.createElement("div");
+    row.className = "ts-texture-row";
+    const labels = backgroundTextureLabels();
+    this._textureTiles = {};
+    BACKGROUND_TEXTURES.forEach((key) => {
+      const tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "ts-texture-tile";
+      const preview = TEXTURE_PREVIEWS[key];
+      if (preview) {
+        tile.style.backgroundImage = preview.image;
+        if (preview.size) tile.style.backgroundSize = preview.size;
+      }
+      const label = document.createElement("span");
+      label.className = "ts-texture-tile-label";
+      label.textContent = labels[key];
+      tile.appendChild(label);
+      tile.addEventListener("click", () => {
+        this._draftStyle.backgroundTexture = key;
+        this._onStyleChange();
+        this._refreshTextureTiles();
+      });
+      this._textureTiles[key] = tile;
+      row.appendChild(tile);
+    });
+    panel.appendChild(row);
+
+    const opacityRow = buildSliderRow(
+      t("templateStudio.textureOpacityLabel"),
+      0.02,
+      0.6,
+      0.01,
+      () => this._draftStyle.backgroundTextureOpacity ?? 0.15,
+      (value) => {
+        this._draftStyle.backgroundTextureOpacity = value;
+        this._onStyleChange();
+      }
+    );
+    panel.appendChild(opacityRow.el);
+    this.textureOpacityWrap = opacityRow.el;
+    this._styleRefreshers.push(opacityRow.refresh);
+    this._styleRefreshers.push(() => this._refreshTextureTiles());
+    this._refreshTextureTiles();
+  }
+
+  _refreshTextureTiles() {
+    if (!this._textureTiles) return;
+    const active = this._draftStyle.backgroundTexture || "none";
+    Object.entries(this._textureTiles).forEach(([key, tile]) => tile.classList.toggle("active", key === active));
+    if (this.textureOpacityWrap) this.textureOpacityWrap.style.display = active !== "none" ? "" : "none";
+  }
+
+  // -- SCHRIFT tab ------------------------------------------------------
+
+  _buildTypeTab(panel) {
+    this._panelTitle(panel, t("style.fontsHeader"));
 
     const headingRow = buildFontSelectRow(
       t("style.headingFontLabel"),
       () => this._draftStyle.fontHeading,
       (font) => {
         this._draftStyle.fontHeading = font;
-        this._renderCanvas();
+        this._onStyleChange();
       }
     );
     panel.appendChild(headingRow.el);
@@ -640,16 +914,13 @@ export class TemplateStudio {
       () => this._draftStyle.fontBody,
       (font) => {
         this._draftStyle.fontBody = font;
-        this._renderCanvas();
+        this._onStyleChange();
       }
     );
     panel.appendChild(bodyRow.el);
     this._styleRefreshers.push(bodyRow.refresh);
 
-    const sizeHeader = document.createElement("div");
-    sizeHeader.className = "section-header";
-    sizeHeader.textContent = t("style.textSizeHeader");
-    panel.appendChild(sizeHeader);
+    this._sectionHeader(panel, t("style.textSizeHeader"));
 
     const headingSizeRow = buildSliderRow(
       t("style.headingSizeLabel"),
@@ -659,7 +930,7 @@ export class TemplateStudio {
       () => this._draftStyle.headingScale,
       (value) => {
         this._draftStyle.headingScale = value;
-        this._renderCanvas();
+        this._onStyleChange();
       }
     );
     panel.appendChild(headingSizeRow.el);
@@ -673,7 +944,7 @@ export class TemplateStudio {
       () => this._draftStyle.bodyScale,
       (value) => {
         this._draftStyle.bodyScale = value;
-        this._renderCanvas();
+        this._onStyleChange();
       }
     );
     panel.appendChild(bodySizeRow.el);
@@ -685,32 +956,64 @@ export class TemplateStudio {
       () => this._draftStyle.cornerStyle,
       (value) => {
         this._draftStyle.cornerStyle = value;
-        this._renderCanvas();
+        this._onStyleChange();
       }
     );
     panel.appendChild(cornerRow.el);
     this._styleRefreshers.push(cornerRow.refresh);
+  }
 
-    const bgHeader = document.createElement("div");
-    bgHeader.className = "section-header";
-    bgHeader.textContent = t("style.backgroundLabel");
-    panel.appendChild(bgHeader);
+  // -- GRUND tab ----------------------------------------------------------
 
-    const bgModeRow = buildSelectRow(
-      t("style.backgroundLabel"),
-      bgModeLabels(),
-      () => this._draftStyle.backgroundMode,
-      (value) => {
-        this._draftStyle.backgroundMode = value;
-        this._renderCanvas();
-        this._refreshGradientSection();
+  _buildGroundTab(panel) {
+    this._panelTitle(panel, t("style.backgroundLabel"));
+
+    const uploadHint = document.createElement("div");
+    uploadHint.className = "field-hint";
+    uploadHint.textContent = t("templateStudio.uploadElsewhereHint");
+    panel.appendChild(uploadHint);
+
+    const zoomRow = buildSliderRow(
+      t("common.zoom"),
+      1,
+      3,
+      0.01,
+      () => this._draftStyle.backgroundImageScale ?? 1,
+      (v) => {
+        this._draftStyle.backgroundImageScale = v;
+        this._onStyleChange();
       }
     );
-    panel.appendChild(bgModeRow.el);
-    this._styleRefreshers.push(bgModeRow.refresh);
-    this.bgModeRowEl = bgModeRow.el;
+    panel.appendChild(zoomRow.el);
+    this._styleRefreshers.push(zoomRow.refresh);
 
-    this._buildGradientSection(panel);
+    const offXRow = buildSliderRow(
+      t("common.horizontalPosition"),
+      0,
+      1,
+      0.01,
+      () => this._draftStyle.backgroundImageOffsetX ?? 0.5,
+      (v) => {
+        this._draftStyle.backgroundImageOffsetX = v;
+        this._onStyleChange();
+      }
+    );
+    panel.appendChild(offXRow.el);
+    this._styleRefreshers.push(offXRow.refresh);
+
+    const offYRow = buildSliderRow(
+      t("common.verticalPosition"),
+      0,
+      1,
+      0.01,
+      () => this._draftStyle.backgroundImageOffsetY ?? 0.5,
+      (v) => {
+        this._draftStyle.backgroundImageOffsetY = v;
+        this._onStyleChange();
+      }
+    );
+    panel.appendChild(offYRow.el);
+    this._styleRefreshers.push(offYRow.refresh);
 
     const bgAnimRow = buildSelectRow(
       t("style.backgroundMotionLabel"),
@@ -718,7 +1021,7 @@ export class TemplateStudio {
       () => this._draftStyle.backgroundAnim || "none",
       (value) => {
         this._draftStyle.backgroundAnim = value;
-        this._renderCanvas();
+        this._onStyleChange();
       }
     );
     panel.appendChild(bgAnimRow.el);
@@ -728,22 +1031,18 @@ export class TemplateStudio {
     bgAnimHint.className = "field-hint";
     bgAnimHint.textContent = t("style.bgAnimHint");
     panel.appendChild(bgAnimHint);
+  }
 
-    this._buildTextureSection(panel);
+  // -- STICKER tab ------------------------------------------------------
 
-    const imagesHeader = document.createElement("div");
-    imagesHeader.className = "section-header";
-    imagesHeader.textContent = t("common.customImagesHeader");
-    panel.appendChild(imagesHeader);
-
-    const imagesHint = document.createElement("div");
-    imagesHint.className = "field-hint";
-    imagesHint.textContent = t("style.customImagesHint");
-    panel.appendChild(imagesHint);
+  _buildStickersTab(panel) {
+    this._panelTitle(panel, t("common.customImagesHeader"), t("style.customImagesHint"));
 
     const imagesContainer = document.createElement("div");
     panel.appendChild(imagesContainer);
 
+    const getStyle = () => this._draftStyle;
+    const onStyleChange = () => this._onStyleChange();
     const refreshImagesSection = () => {
       imagesContainer.innerHTML = "";
       const images = this._draftStyle.customImages || [];
@@ -762,197 +1061,45 @@ export class TemplateStudio {
     this._styleRefreshers.push(refreshImagesSection);
   }
 
-  // NEW: multi-stop gradient editor. Kept simple/opt-in — the plain
-  // background/backgroundEnd swatches above already cover the common
-  // "two-color fade" case; this only appears once backgroundMode is
-  // "gradient", and starts collapsed behind a checkbox so someone who just
-  // wants the simple 2-color fade never has to look at it.
-  _buildGradientSection(panel) {
-    this.gradientWrap = document.createElement("div");
-    panel.appendChild(this.gradientWrap);
-
-    const toggleLabel = document.createElement("label");
-    toggleLabel.className = "checkbox-row";
-    this.gradientToggle = document.createElement("input");
-    this.gradientToggle.type = "checkbox";
-    this.gradientToggle.addEventListener("change", () => {
-      const style = this._draftStyle;
-      if (this.gradientToggle.checked) {
-        style.backgroundGradientStops = [
-          { offset: 0, color: style.colors.background || "#0A0A0F" },
-          { offset: 1, color: style.colors.backgroundEnd || style.colors.background || "#0A0A0F" },
-        ];
-      } else {
-        style.backgroundGradientStops = null;
-      }
-      this._renderCanvas();
-      this._refreshGradientSection();
-    });
-    const toggleText = document.createElement("span");
-    toggleText.textContent = t("templateStudio.advancedGradientToggle");
-    toggleLabel.append(this.gradientToggle, toggleText);
-    this.gradientWrap.appendChild(toggleLabel);
-
-    this.gradientStopsList = document.createElement("div");
-    this.gradientWrap.appendChild(this.gradientStopsList);
-
-    const addStopBtn = document.createElement("button");
-    addStopBtn.textContent = t("templateStudio.addGradientStop");
-    addStopBtn.style.marginBottom = "12px";
-    addStopBtn.addEventListener("click", () => {
-      const stops = this._draftStyle.backgroundGradientStops;
-      if (!stops) return;
-      const color = GRADIENT_STOP_COLORS[stops.length % GRADIENT_STOP_COLORS.length];
-      stops.push({ offset: 0.5, color });
-      stops.sort((a, b) => a.offset - b.offset);
-      this._renderCanvas();
-      this._refreshGradientSection();
-    });
-    this.gradientAddBtn = addStopBtn;
-    this.gradientWrap.appendChild(addStopBtn);
-
-    const angleWrap = document.createElement("div");
-    angleWrap.style.marginBottom = "12px";
-    const angleLabel = document.createElement("label");
-    angleLabel.className = "field-label";
-    angleLabel.textContent = t("templateStudio.gradientAngleLabel");
-    angleWrap.appendChild(angleLabel);
-    this.gradientAngleInput = document.createElement("input");
-    this.gradientAngleInput.type = "number";
-    this.gradientAngleInput.min = "0";
-    this.gradientAngleInput.max = "360";
-    this.gradientAngleInput.step = "1";
-    this.gradientAngleInput.addEventListener("input", () => {
-      const v = Number(this.gradientAngleInput.value);
-      if (Number.isFinite(v)) {
-        this._draftStyle.backgroundGradientAngle = clamp(v, 0, 360);
-        this._renderCanvas();
-      }
-    });
-    angleWrap.appendChild(this.gradientAngleInput);
-    this.gradientAngleWrap = angleWrap;
-    this.gradientWrap.appendChild(angleWrap);
-
-    this._styleRefreshers.push(() => this._refreshGradientSection());
-    this._refreshGradientSection();
-  }
-
-  _refreshGradientSection() {
-    if (!this.gradientWrap) return;
-    const style = this._draftStyle;
-    const isGradientMode = style.backgroundMode === "gradient";
-    this.gradientWrap.style.display = isGradientMode ? "" : "none";
-    if (!isGradientMode) return;
-
-    const stops = style.backgroundGradientStops;
-    this.gradientToggle.checked = !!stops;
-    this.gradientStopsList.style.display = stops ? "" : "none";
-    this.gradientAddBtn.style.display = stops ? "" : "none";
-    this.gradientAngleWrap.style.display = stops ? "" : "none";
-    if (!stops) return;
-
-    this.gradientAngleInput.value = String(Math.round(style.backgroundGradientAngle ?? 180));
-
-    this.gradientStopsList.innerHTML = "";
-    stops.forEach((stop, i) => {
-      const row = document.createElement("div");
-      row.className = "gradient-stop-row";
-
-      const colorInput = document.createElement("input");
-      colorInput.type = "color";
-      colorInput.className = "color-swatch";
-      colorInput.value = stop.color;
-      colorInput.addEventListener("input", () => {
-        stop.color = colorInput.value;
-        this._renderCanvas();
-      });
-      row.appendChild(colorInput);
-
-      const offsetInput = document.createElement("input");
-      offsetInput.type = "number";
-      offsetInput.min = "0";
-      offsetInput.max = "100";
-      offsetInput.step = "1";
-      offsetInput.value = String(Math.round(stop.offset * 100));
-      offsetInput.title = t("templateStudio.gradientStopOffset");
-      offsetInput.addEventListener("input", () => {
-        const v = Number(offsetInput.value);
-        if (Number.isFinite(v)) {
-          stop.offset = clamp(v / 100, 0, 1);
-          this._renderCanvas();
-        }
-      });
-      row.appendChild(offsetInput);
-
-      const removeBtn = document.createElement("button");
-      removeBtn.className = "danger";
-      removeBtn.textContent = "✕";
-      removeBtn.disabled = stops.length <= 2;
-      removeBtn.addEventListener("click", () => {
-        const idx = stops.indexOf(stop);
-        if (idx !== -1 && stops.length > 2) {
-          stops.splice(idx, 1);
-          this._renderCanvas();
-          this._refreshGradientSection();
-        }
-      });
-      row.appendChild(removeBtn);
-
-      this.gradientStopsList.appendChild(row);
-    });
-  }
-
-  // NEW: procedural, asset-free background texture overlay.
-  _buildTextureSection(panel) {
-    const labels = backgroundTextureLabels();
-    const textureRow = buildSelectRow(
-      t("templateStudio.textureLabel"),
-      BACKGROUND_TEXTURES.reduce((acc, key) => ({ ...acc, [key]: labels[key] }), {}),
-      () => this._draftStyle.backgroundTexture || "none",
-      (value) => {
-        this._draftStyle.backgroundTexture = value;
-        this._renderCanvas();
-        this._refreshTextureSection();
-      }
-    );
-    panel.appendChild(textureRow.el);
-    this._styleRefreshers.push(textureRow.refresh);
-
-    const opacityRow = buildSliderRow(
-      t("templateStudio.textureOpacityLabel"),
-      0.02,
-      0.6,
-      0.01,
-      () => this._draftStyle.backgroundTextureOpacity ?? 0.15,
-      (value) => {
-        this._draftStyle.backgroundTextureOpacity = value;
-        this._renderCanvas();
-      }
-    );
-    panel.appendChild(opacityRow.el);
-    this.textureOpacityWrap = opacityRow.el;
-    this._styleRefreshers.push(opacityRow.refresh);
-    this._styleRefreshers.push(() => this._refreshTextureSection());
-    this._refreshTextureSection();
-  }
-
-  _refreshTextureSection() {
-    if (!this.textureOpacityWrap) return;
-    const active = (this._draftStyle.backgroundTexture || "none") !== "none";
-    this.textureOpacityWrap.style.display = active ? "" : "none";
-  }
-
-  // -- Element tab: whatever's selected on the canvas ----------------------
-  // A near-direct port of layoutEditor.js's property panel, plus a new
-  // Shadow section available on every element type.
+  // -- ELEMENT tab: whatever's selected on the canvas ----------------------
+  // A near-direct port of layoutEditor.js's property panel, plus a Shadow
+  // section available on every element type (Studio-only).
   _buildElementTab(container) {
+    // One-shot: loads a reusable, elements-only Layout (saved via the
+    // standalone Layout Editor's own library — customLayoutLibrary.js,
+    // deliberately separate from this template's full style) into the
+    // current draft, replacing its elements while leaving colors/fonts/
+    // background alone. Placed here since it only affects canvas elements.
+    const loadLayoutWrap = document.createElement("div");
+    loadLayoutWrap.style.marginBottom = "16px";
+    const loadLayoutLabel = document.createElement("label");
+    loadLayoutLabel.className = "field-label";
+    loadLayoutLabel.textContent = t("templateStudio.loadLayoutTitle");
+    loadLayoutWrap.appendChild(loadLayoutLabel);
+    this.loadLayoutSelect = document.createElement("select");
+    this.loadLayoutSelect.addEventListener("change", () => {
+      const id = this.loadLayoutSelect.value;
+      this.loadLayoutSelect.value = "";
+      if (!id || this._isLocked()) return;
+      const entry = getCustomLayout(id);
+      if (!entry) return;
+      this._draftStyle.customLayout.elements = sanitizeCustomLayout(entry.elements);
+      this._selectElement(null);
+      this._renderCanvas();
+      this._renderOverlay();
+    });
+    this._lockableEls.push(this.loadLayoutSelect);
+    loadLayoutWrap.appendChild(this.loadLayoutSelect);
+    container.appendChild(loadLayoutWrap);
+
     this.propEmpty = document.createElement("div");
     this.propEmpty.className = "field-hint";
     this.propEmpty.textContent = t("layoutEditor.emptyHint");
     container.appendChild(this.propEmpty);
 
     this.propTitle = document.createElement("div");
-    this.propTitle.className = "section-header";
+    this.propTitle.className = "ts-panel-title";
+    this.propTitle.style.marginBottom = "14px";
     container.appendChild(this.propTitle);
 
     this.propFields = document.createElement("div");
@@ -987,7 +1134,7 @@ export class TemplateStudio {
     this.inputRot = makeNumberRow(t("layoutEditor.rotationLabel"), -180, 180, 1, (v) => this._setSelectedField("rotation", v));
 
     const styleHeader = document.createElement("div");
-    styleHeader.className = "section-header";
+    styleHeader.className = "ts-section-header";
     styleHeader.textContent = t("layoutEditor.elementStyleHeader");
     this.propFields.appendChild(styleHeader);
 
@@ -1141,7 +1288,7 @@ export class TemplateStudio {
 
   _buildCardStyleSection() {
     const header = document.createElement("div");
-    header.className = "section-header";
+    header.className = "ts-section-header";
     header.textContent = t("layoutEditor.cardSkinHeader");
     this.propFields.appendChild(header);
     const labels = cardStyleLabels();
@@ -1157,7 +1304,7 @@ export class TemplateStudio {
 
   _buildFontSection() {
     const header = document.createElement("div");
-    header.className = "section-header";
+    header.className = "ts-section-header";
     header.textContent = t("layoutEditor.fontHeader");
     this.propFields.appendChild(header);
 
@@ -1237,7 +1384,7 @@ export class TemplateStudio {
 
   _buildAnimationSection() {
     const header = document.createElement("div");
-    header.className = "section-header";
+    header.className = "ts-section-header";
     header.textContent = t("layoutEditor.animationHeader");
     this.propFields.appendChild(header);
     const animLabels = animStyleLabels();
@@ -1260,12 +1407,12 @@ export class TemplateStudio {
     this.animIntensitySelect = intensitySelect;
   }
 
-  // NEW: a static drop shadow, available on every element type — a separate
+  // A static drop shadow, available on every element type — a separate
   // concept from the "Glow" animation style above (see renderer.js's
   // applyElementShadow for how the two compose).
   _buildShadowSection() {
     const header = document.createElement("div");
-    header.className = "section-header";
+    header.className = "ts-section-header";
     header.textContent = t("templateStudio.shadowHeader");
     this.propFields.appendChild(header);
     this.shadowSectionHeader = header;
@@ -1302,7 +1449,7 @@ export class TemplateStudio {
   _buildTextSection() {
     this.textFieldsWrap = document.createElement("div");
     const header = document.createElement("div");
-    header.className = "section-header";
+    header.className = "ts-section-header";
     header.textContent = t("layoutEditor.textContentHeader");
     this.textFieldsWrap.appendChild(header);
 
@@ -1349,7 +1496,7 @@ export class TemplateStudio {
   _buildShapeSection() {
     this.shapeFieldsWrap = document.createElement("div");
     const header = document.createElement("div");
-    header.className = "section-header";
+    header.className = "ts-section-header";
     header.textContent = t("layoutEditor.shapeHeader");
     this.shapeFieldsWrap.appendChild(header);
 
@@ -1389,7 +1536,7 @@ export class TemplateStudio {
   _buildImageSection() {
     this.imageFieldsWrap = document.createElement("div");
     const header = document.createElement("div");
-    header.className = "section-header";
+    header.className = "ts-section-header";
     header.textContent = t("layoutEditor.imageHeader");
     this.imageFieldsWrap.appendChild(header);
 
@@ -1430,6 +1577,127 @@ export class TemplateStudio {
     this.deleteElementBtn.addEventListener("click", () => this._deleteSelectedElement());
     this.deleteWrap.appendChild(this.deleteElementBtn);
     this.propFields.appendChild(this.deleteWrap);
+  }
+
+  // -- Panel foot: save/export/delete --------------------------------------
+
+  _buildPanelFoot() {
+    const foot = document.createElement("div");
+    foot.className = "ts-panel-foot";
+
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "ts-btn-save";
+    saveBtn.textContent = t("common.saveToLibrary");
+    saveBtn.addEventListener("click", () => {
+      const style = this._draftStyle;
+      const name = this.nameInput.value.trim() || "Custom Template";
+      if (style.templateId && style.templateId !== "custom" && isCustomTemplateId(style.templateId)) {
+        updateCustomTemplate(style.templateId, { name, style });
+      } else {
+        const entry = addCustomTemplate({ name, style });
+        style.templateId = entry.id;
+      }
+      this._loadedLibraryId = style.templateId;
+      this._refreshLibraryState();
+    });
+    foot.appendChild(saveBtn);
+
+    foot.appendChild(this._buildExportMenu());
+
+    this.deleteLibraryBtn = document.createElement("button");
+    this.deleteLibraryBtn.className = "ts-btn-delete-icon";
+    this.deleteLibraryBtn.textContent = "🗑";
+    this.deleteLibraryBtn.title = t("common.deleteFromLibrary");
+    this.deleteLibraryBtn.addEventListener("click", () => {
+      if (!this._loadedLibraryId) return;
+      removeCustomTemplate(this._loadedLibraryId);
+      this._loadedLibraryId = null;
+      this._draftStyle.templateId = "custom";
+      this._refreshLibraryState();
+    });
+    foot.appendChild(this.deleteLibraryBtn);
+
+    return foot;
+  }
+
+  // "Exportieren ▾" panel-foot control: local file export, upload-to-Hub,
+  // or import — folded into one menu (per the studio's compact footer).
+  _buildExportMenu() {
+    const wrap = document.createElement("div");
+    wrap.className = "sp-menu";
+    wrap.style.flex = "1";
+
+    const menuBtn = document.createElement("button");
+    menuBtn.className = "ts-btn-export";
+    menuBtn.style.width = "100%";
+    menuBtn.textContent = `${t("common.exportEllipsis")} ▾`;
+    wrap.appendChild(menuBtn);
+    this._exportMenuBtn = menuBtn;
+
+    const list = document.createElement("div");
+    list.className = "sp-menu-list";
+    list.setAttribute("role", "menu");
+    list.setAttribute("aria-label", t("common.exportEllipsis"));
+
+    const localItem = document.createElement("button");
+    localItem.className = "sp-menu-item";
+    localItem.type = "button";
+    localItem.textContent = t("common.exportLocalOption");
+    localItem.addEventListener("click", () => {
+      closeMenu();
+      this._exportLocal();
+    });
+    list.appendChild(localItem);
+
+    const uploadItem = document.createElement("button");
+    uploadItem.className = "sp-menu-item";
+    uploadItem.type = "button";
+    uploadItem.textContent = t("common.exportUploadOption");
+    uploadItem.addEventListener("click", () => {
+      closeMenu();
+      this._uploadToHub();
+    });
+    list.appendChild(uploadItem);
+
+    const importItem = document.createElement("button");
+    importItem.className = "sp-menu-item";
+    importItem.type = "button";
+    importItem.textContent = t("common.importEllipsis");
+    importItem.addEventListener("click", () => {
+      closeMenu();
+      this._importTemplate();
+    });
+    list.appendChild(importItem);
+
+    wrap.appendChild(list);
+
+    const closeMenu = () => wrap.classList.remove("open");
+    menuBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      wrap.classList.toggle("open");
+    });
+    document.addEventListener("click", (e) => {
+      if (!wrap.contains(e.target)) closeMenu();
+    });
+
+    return wrap;
+  }
+
+  // ------------------------------------------------------------------
+  // Element mutation helpers
+  // ------------------------------------------------------------------
+
+  _onStyleChange() {
+    this._renderCanvas();
+    this._refreshPaletteStrip();
+  }
+
+  _refreshPaletteStrip() {
+    if (!this.paletteStripEl) return;
+    const style = this._draftStyle;
+    const c1 = style.colors?.background || "#0A0A0F";
+    const c2 = style.colors?.backgroundEnd || c1;
+    this.paletteStripEl.style.background = `linear-gradient(90deg, ${c1}, ${c2})`;
   }
 
   _setSelectedField(field, rawValue) {
@@ -1486,6 +1754,7 @@ export class TemplateStudio {
   }
 
   _refreshLoadLayoutSelect() {
+    if (!this.loadLayoutSelect) return;
     this.loadLayoutSelect.innerHTML = "";
     const blank = document.createElement("option");
     blank.value = "";
@@ -1500,11 +1769,9 @@ export class TemplateStudio {
   }
 
   _refreshLibraryState() {
-    const style = this._draftStyle;
     const entry = this._loadedLibraryId ? getCustomTemplate(this._loadedLibraryId) : null;
     this.nameInput.value = entry ? entry.name : this.nameInput.value;
     this.deleteLibraryBtn.disabled = !entry;
-    void style;
   }
 
   _refreshLockUI() {
@@ -1535,30 +1802,25 @@ export class TemplateStudio {
 
     this._draftElements.forEach((el) => {
       const div = document.createElement("div");
-      div.className = "layout-el-handle" + (el.id === this._selectedId ? " selected" : "");
+      div.className = "ts-handle" + (el.id === this._selectedId ? " selected" : "");
       this._positionHandleEl(div, el);
-
-      const label = document.createElement("div");
-      label.className = "layout-el-label";
-      label.textContent = elementLabel(el);
-      div.appendChild(label);
 
       if (!locked) {
         Object.keys(CORNER_SIGNS).forEach((corner) => {
           const handle = document.createElement("div");
-          handle.className = `layout-el-resize ${corner}`;
+          handle.className = `ts-handle-resize ${corner}`;
           handle.addEventListener("pointerdown", (e) => this._startResize(e, el, corner));
           div.appendChild(handle);
         });
 
         const rotateHandle = document.createElement("div");
-        rotateHandle.className = "layout-el-rotate";
+        rotateHandle.className = "ts-handle-rotate";
         rotateHandle.addEventListener("pointerdown", (e) => this._startRotate(e, el));
         div.appendChild(rotateHandle);
       }
 
       div.addEventListener("pointerdown", (e) => {
-        if (e.target !== div && e.target !== label) return;
+        if (e.target !== div) return;
         this._selectElement(el.id);
         if (!locked) this._startMove(e, el);
       });
@@ -1566,13 +1828,28 @@ export class TemplateStudio {
       this.overlayLayer.appendChild(div);
       this._handleEls.set(el.id, div);
     });
+
+    this._positionSelectionPill();
+  }
+
+  _positionSelectionPill() {
+    const el = this._draftElements.find((e) => e.id === this._selectedId);
+    if (!el) {
+      this.selectionPillEl.classList.remove("visible");
+      return;
+    }
+    this.selectionPillEl.classList.add("visible");
+    this.selectionNameEl.textContent = elementLabel(el);
+    this.selectionPillEl.style.left = `${el.cx * 100}%`;
+    this.selectionPillEl.style.top = `${(el.cy - el.h / 2) * 100}%`;
+    this.selectionPillEl.style.transform = "translate(-50%, -30px)";
   }
 
   _selectElement(id) {
     if (this._selectedId === id) {
-      // Still keep the sidebar in sync even on a no-op reselect (e.g. after
-      // a fresh open() where nothing was previously selected).
-      this._activateSidebarTab(id ? "element" : "style");
+      // Still keep the tool panel in sync even on a no-op reselect (e.g.
+      // after a fresh open() where nothing was previously selected).
+      this._activateToolTab(id ? "element" : "colors");
       return;
     }
     const prev = this._handleEls.get(this._selectedId);
@@ -1581,7 +1858,8 @@ export class TemplateStudio {
     const next = this._handleEls.get(id);
     if (next) next.classList.add("selected");
     this._refreshPropertyPanel();
-    this._activateSidebarTab(id ? "element" : "style");
+    this._positionSelectionPill();
+    this._activateToolTab(id ? "element" : "colors");
   }
 
   _refreshPropertyPanel() {
@@ -1680,6 +1958,7 @@ export class TemplateStudio {
       this._positionHandleEl(this._handleEls.get(el.id), el);
       this._renderCanvas();
       this._syncPropertyPanelValues(el);
+      this._positionSelectionPill();
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
@@ -1716,6 +1995,7 @@ export class TemplateStudio {
       this._positionHandleEl(this._handleEls.get(el.id), el);
       this._renderCanvas();
       this._syncPropertyPanelValues(el);
+      this._positionSelectionPill();
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
@@ -1771,6 +2051,7 @@ export class TemplateStudio {
     this._styleRefreshers.forEach((fn) => fn());
     this._refreshLockUI();
     this._refreshLoadLayoutSelect();
+    this._refreshPaletteStrip();
     this._selectElement(null);
     this._renderCanvas();
     this._renderOverlay();

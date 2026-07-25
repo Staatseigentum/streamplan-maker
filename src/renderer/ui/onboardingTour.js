@@ -122,13 +122,14 @@ export class OnboardingTour {
         section: "templateStudio",
         titleKey: "onboarding.templateStudioIntroTitle",
         bodyKey: "onboarding.templateStudioIntroBody",
-        activate: () => templateStudio._activateSidebarTab("style"),
+        activate: () => templateStudio._activateToolTab("colors"),
         getTarget: () => templateStudio.canvasWrap,
       },
       {
         section: "templateStudio",
         titleKey: "onboarding.templateStudioStyleTitle",
         bodyKey: "onboarding.templateStudioStyleBody",
+        activate: () => templateStudio._activateToolTab("colors"),
         getTarget: () => templateStudio.bgModeRowEl,
       },
       {
@@ -136,7 +137,7 @@ export class OnboardingTour {
         titleKey: "onboarding.templateStudioElementTitle",
         bodyKey: "onboarding.templateStudioElementBody",
         activate: () => {
-          templateStudio._activateSidebarTab("element");
+          templateStudio._activateToolTab("element");
           this._selectFirstElementIfNone(templateStudio);
         },
         getTarget: () => templateStudio.shadowSectionHeader,
@@ -145,7 +146,7 @@ export class OnboardingTour {
         section: "templateStudio",
         titleKey: "onboarding.templateStudioSaveTitle",
         bodyKey: "onboarding.templateStudioSaveBody",
-        getTarget: () => templateStudio.libraryRowEl,
+        getTarget: () => templateStudio.panelFootEl,
       },
 
       { targetId: "exportBar", titleKey: "onboarding.step5Title", bodyKey: "onboarding.step5Body" },
@@ -162,20 +163,20 @@ export class OnboardingTour {
         section: "layoutEditor",
         titleKey: "onboarding.layoutEditorAddTitle",
         bodyKey: "onboarding.layoutEditorAddBody",
-        getTarget: () => layoutEditor.toolbarEl,
+        getTarget: () => layoutEditor.layersRailEl,
       },
       {
         section: "layoutEditor",
         titleKey: "onboarding.layoutEditorPropertiesTitle",
         bodyKey: "onboarding.layoutEditorPropertiesBody",
         activate: () => this._selectFirstElementIfNone(layoutEditor),
-        getTarget: () => layoutEditor.sidebarEl,
+        getTarget: () => layoutEditor.transformBarEl,
       },
       {
         section: "layoutEditor",
         titleKey: "onboarding.layoutEditorSaveTitle",
         bodyKey: "onboarding.layoutEditorSaveBody",
-        getTarget: () => layoutEditor.libraryRowEl,
+        getTarget: () => layoutEditor.draftChipEl,
       },
 
       { targetId: "settingsBtn", titleKey: "onboarding.step7Title", bodyKey: "onboarding.step7Body" },

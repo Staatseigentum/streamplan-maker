@@ -6,6 +6,11 @@
 // back. The draft is a deep-cloned working copy at all times — nothing here
 // ever touches the live document style until "Apply to this Template" (or a
 // library Save/Export) is explicitly clicked.
+//
+// UI shell: the "Anordnen / Arrange" mode — a cool, technical workspace
+// (blueprint grid, layers rail, transform bar) styled entirely via
+// styles/layoutEditor.css's .le-* classes, deliberately distinct from
+// Template Studio's warm "Gestalten" mode (see templateStudio.js).
 import { CANVAS_WIDTH, CANVAS_HEIGHT, DAY_NAMES, LAYOUT_FILE_EXTENSION } from "../../shared/constants.js";
 import { createStreamerProfile, createDayEntry } from "../models/schedule.js";
 import { renderStreamplan } from "../rendering/renderer.js";
@@ -69,9 +74,8 @@ function shapeKindLabels() {
     arrow: t("layoutEditor.shapeArrowOpt"),
   };
 }
-// Purely decorative glyphs for the toolbar's shape-picker menu — not
-// translated (they're symbols, not text) and not used in the property
-// panel's plain <select>, which stays label-only like every other dropdown.
+// Purely decorative glyphs for the "+ Shape" menu — not translated (they're
+// symbols, not text).
 const SHAPE_KIND_ICONS = {
   rect: "▭",
   ellipse: "◯",
@@ -83,7 +87,10 @@ const SHAPE_KIND_ICONS = {
   star: "★",
   arrow: "➜",
 };
+// Layer-row type glyphs (see handoff 2a "Ebenen-Leiste").
+const LAYER_TYPE_GLYPHS = { logo: "◯", header: "▭", dayCard: "▦", text: "▭", shape: "★", image: "▤" };
 const ANIM_TICK_MS = 1000 / 30;
+const GRID_SIZE_PX = 32;
 
 // All 7 days populated (unlike the 3-day gallery-thumbnail sample) so every
 // day card is always visible/draggable while editing, regardless of what the
@@ -141,12 +148,14 @@ function toLocalPoint(px, py, cx, cy, rotationDeg) {
 // Snaps a box's center along one axis to the canvas center (50%) or to
 // either canvas edge (accounting for the box's own half-size, so the box's
 // EDGE lands on the canvas edge rather than just its center at 0%/100%).
+// Returns { value, snapped } so callers can show a guide line only while an
+// actual snap is in effect.
 const SNAP_THRESHOLD = 0.012;
 function snapAxis(center, halfSize) {
   for (const candidate of [0.5, halfSize, 1 - halfSize]) {
-    if (Math.abs(center - candidate) < SNAP_THRESHOLD) return candidate;
+    if (Math.abs(center - candidate) < SNAP_THRESHOLD) return { value: candidate, snapped: true, axisValue: candidate };
   }
-  return center;
+  return { value: center, snapped: false, axisValue: null };
 }
 
 const CORNER_SIGNS = { nw: [-1, -1], ne: [1, -1], sw: [-1, 1], se: [1, 1] };
@@ -160,211 +169,311 @@ export class LayoutEditor {
     this._selectedId = null;
     this._loadedLibraryId = null;
     this._handleEls = new Map();
+    this._gridVisible = true;
+    this._snapEnabled = true;
+    this._dirty = false;
+    this._draftName = "";
+    this._openPopoverKey = null;
+    this._dragLayerId = null;
     this._build();
   }
+
+  // ------------------------------------------------------------------
+  // Shell
+  // ------------------------------------------------------------------
 
   _build() {
     this.overlayEl.innerHTML = "";
     const shell = document.createElement("div");
-    shell.className = "layout-editor-shell";
+    shell.className = "le-shell";
 
-    // -- Toolbar ------------------------------------------------------
-    const toolbar = document.createElement("div");
-    toolbar.className = "layout-editor-toolbar";
+    shell.appendChild(this._buildTopbar());
 
-    const title = document.createElement("div");
-    title.className = "layout-editor-title";
-    title.textContent = t("layoutEditor.title");
-    toolbar.appendChild(title);
+    const body = document.createElement("div");
+    body.className = "le-body";
+    body.appendChild(this._buildLayersRail());
+    body.appendChild(this._buildCanvasArea());
+    shell.appendChild(body);
 
-    const newBtn = document.createElement("button");
-    newBtn.textContent = t("common.new");
-    newBtn.addEventListener("click", () => {
-      this._draftElements = buildDefaultCustomLayoutElements();
-      this._loadedLibraryId = null;
-      this.nameInput.value = "";
-      this._selectElement(null);
-      this._refreshLoadSelect();
-      this._renderCanvas();
-      this._renderOverlay();
-    });
-    toolbar.appendChild(newBtn);
+    shell.appendChild(this._buildTransformBar());
 
-    const addTextBtn = document.createElement("button");
-    addTextBtn.textContent = t("layoutEditor.addText");
-    addTextBtn.addEventListener("click", () => this._addFreeformElement("text"));
-    toolbar.appendChild(addTextBtn);
+    this.overlayEl.appendChild(shell);
+    this.shellEl = shell;
 
-    toolbar.appendChild(this._buildShapeAddMenu());
+    this._buildPropertySections();
 
-    const addImageBtn = document.createElement("button");
-    addImageBtn.textContent = t("layoutEditor.addImage");
-    addImageBtn.addEventListener("click", async () => {
-      let path;
-      try {
-        path = await window.streamplanAPI.chooseAssetPath("sticker");
-      } catch (err) {
-        await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("common.fileDialogError", { message: err.message }));
-        return;
+    window.addEventListener("keydown", (e) => {
+      if (!this.overlayEl.classList.contains("open")) return;
+      if (e.key === "Escape") {
+        if (this._openPopoverKey) {
+          this._closePopover();
+        } else {
+          this.close();
+        }
       }
-      if (!path) return;
-      this._addFreeformElement("image", { imagePath: path });
     });
-    toolbar.appendChild(addImageBtn);
+  }
+
+  // -- Topbar -----------------------------------------------------------
+
+  _buildTopbar() {
+    const topbar = document.createElement("div");
+    topbar.className = "le-topbar";
+    this.topbarEl = topbar;
+
+    const brand = document.createElement("div");
+    brand.className = "le-brand";
+    const glyph = document.createElement("div");
+    glyph.className = "le-brand-glyph";
+    for (let i = 0; i < 4; i++) glyph.appendChild(document.createElement("span"));
+    const brandText = document.createElement("div");
+    brandText.className = "le-brand-text";
+    const title = document.createElement("div");
+    title.className = "le-title";
+    title.textContent = t("layoutEditor.title");
+    const subtitle = document.createElement("div");
+    subtitle.className = "le-subtitle";
+    subtitle.textContent = t("layoutEditor.modeSubtitle");
+    brandText.append(title, subtitle);
+    brand.append(glyph, brandText);
+    topbar.appendChild(brand);
+
+    topbar.appendChild(this._divider());
+    topbar.appendChild(this._buildDraftChip());
+
+    const saveBtn = document.createElement("button");
+    saveBtn.className = "le-btn-ghost";
+    saveBtn.textContent = t("common.save");
+    saveBtn.addEventListener("click", () => this._saveDraft());
+    topbar.appendChild(saveBtn);
+
+    topbar.appendChild(this._buildExportMenu());
 
     const spacer = document.createElement("div");
-    spacer.className = "layout-editor-toolbar-spacer";
-    toolbar.appendChild(spacer);
+    spacer.className = "le-spacer";
+    topbar.appendChild(spacer);
+
+    this.elementCountEl = document.createElement("div");
+    this.elementCountEl.className = "le-element-count";
+    topbar.appendChild(this.elementCountEl);
+
+    const closeBtn = document.createElement("button");
+    closeBtn.className = "le-btn-close";
+    closeBtn.textContent = t("layoutEditor.closeBtn");
+    closeBtn.addEventListener("click", () => this.close());
+    topbar.appendChild(closeBtn);
 
     this.applyBtn = document.createElement("button");
-    this.applyBtn.className = "primary";
+    this.applyBtn.className = "le-btn-primary";
     this.applyBtn.textContent = t("layoutEditor.applyBtn");
     this.applyBtn.addEventListener("click", () => {
       if (this._onApply) this._onApply(this._draftElements.map((el) => ({ ...el })));
       this.close();
     });
-    toolbar.appendChild(this.applyBtn);
+    topbar.appendChild(this.applyBtn);
 
-    const closeBtn = document.createElement("button");
-    closeBtn.textContent = t("layoutEditor.closeBtn");
-    closeBtn.addEventListener("click", () => this.close());
-    toolbar.appendChild(closeBtn);
-    this.toolbarEl = toolbar;
-
-    // -- Library row (save/export/import a reusable layout) -----------
-    const libraryRow = document.createElement("div");
-    libraryRow.className = "layout-editor-library-row";
-
-    this.loadSelect = document.createElement("select");
-    this.loadSelect.title = t("layoutEditor.loadSelectTitle");
-    this.loadSelect.addEventListener("change", () => {
-      const id = this.loadSelect.value;
-      if (!id) return;
-      const entry = getCustomLayout(id);
-      if (!entry) return;
-      this._loadedLibraryId = id;
-      this._draftElements = entry.elements.map((el) => ({ ...el }));
-      this.nameInput.value = entry.name;
-      this._selectElement(null);
-      this._refreshLoadSelect();
-      this._renderCanvas();
-      this._renderOverlay();
-    });
-    libraryRow.appendChild(this.loadSelect);
-
-    this.nameInput = document.createElement("input");
-    this.nameInput.type = "text";
-    this.nameInput.placeholder = t("layoutEditor.namePlaceholder");
-    libraryRow.appendChild(this.nameInput);
-
-    const saveBtn = document.createElement("button");
-    saveBtn.textContent = t("common.saveToLibrary");
-    saveBtn.addEventListener("click", () => {
-      const name = this.nameInput.value.trim() || "Custom Layout";
-      if (this._loadedLibraryId && getCustomLayout(this._loadedLibraryId)) {
-        updateCustomLayout(this._loadedLibraryId, { name, elements: this._draftElements });
-      } else {
-        const entry = addCustomLayout({ name, elements: this._draftElements });
-        this._loadedLibraryId = entry.id;
-      }
-      this._refreshLoadSelect();
-    });
-    libraryRow.appendChild(saveBtn);
-
-    libraryRow.appendChild(this._buildExportMenu());
-
-    const importBtn = document.createElement("button");
-    importBtn.textContent = t("common.importEllipsis");
-    importBtn.addEventListener("click", async () => {
-      const entry = await this._importLayoutFromDialog();
-      if (!entry) return;
-      this._loadedLibraryId = entry.id;
-      this._draftElements = entry.elements.map((el) => ({ ...el }));
-      this.nameInput.value = entry.name;
-      this._selectElement(null);
-      this._refreshLoadSelect();
-      this._renderCanvas();
-      this._renderOverlay();
-    });
-    libraryRow.appendChild(importBtn);
-
-    this.deleteLibraryBtn = document.createElement("button");
-    this.deleteLibraryBtn.className = "danger";
-    this.deleteLibraryBtn.textContent = t("common.deleteFromLibrary");
-    this.deleteLibraryBtn.addEventListener("click", () => {
-      if (!this._loadedLibraryId) return;
-      removeCustomLayout(this._loadedLibraryId);
-      this._loadedLibraryId = null;
-      this._refreshLoadSelect();
-    });
-    libraryRow.appendChild(this.deleteLibraryBtn);
-    this.libraryRowEl = libraryRow;
-
-    // -- Body: canvas + sidebar -----------------------------------------
-    const body = document.createElement("div");
-    body.className = "layout-editor-body";
-
-    const canvasArea = document.createElement("div");
-    canvasArea.className = "layout-editor-canvas-area";
-
-    this.canvasWrap = document.createElement("div");
-    this.canvasWrap.className = "layout-editor-canvas-wrap";
-
-    this.canvasEl = document.createElement("canvas");
-    this.canvasEl.className = "layout-editor-canvas";
-    this.canvasWrap.appendChild(this.canvasEl);
-
-    this.overlayLayer = document.createElement("div");
-    this.overlayLayer.className = "layout-editor-overlay-layer";
-    this.canvasWrap.appendChild(this.overlayLayer);
-
-    this.canvasWrap.addEventListener("pointerdown", (e) => {
-      if (e.target === this.canvasWrap || e.target === this.canvasEl) this._selectElement(null);
-    });
-
-    canvasArea.appendChild(this.canvasWrap);
-
-    this.sidebarEl = document.createElement("div");
-    this.sidebarEl.className = "side-scroll layout-editor-sidebar";
-    this._buildPropertyPanel(this.sidebarEl);
-
-    body.append(canvasArea, this.sidebarEl);
-
-    shell.append(toolbar, libraryRow, body);
-    this.overlayEl.appendChild(shell);
-
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && this.overlayEl.classList.contains("open")) this.close();
-    });
+    return topbar;
   }
 
-  // "+ Shape" toolbar control: rather than dropping a default rectangle
-  // immediately, this opens a small custom dropdown listing every
-  // SHAPE_KINDS option (with an icon), and only adds the freeform element
-  // once the user actually picks one — so a shape always starts out as the
-  // kind the user meant, instead of "add rect, then flip it to something
-  // else in the property panel".
+  _divider() {
+    const div = document.createElement("div");
+    div.className = "le-divider";
+    return div;
+  }
+
+  // Draft chip: replaces the old library-row's load-select + name field.
+  // Click opens a menu listing every saved layout (click = load) plus
+  // New/Rename/Import/Delete actions. The name itself becomes an inline
+  // <input> while renaming.
+  _buildDraftChip() {
+    const chip = document.createElement("div");
+    chip.className = "le-draft-chip sp-menu";
+
+    const label = document.createElement("span");
+    label.className = "le-draft-chip-label";
+    label.textContent = t("layoutEditor.draftLabel");
+
+    this.draftNameEl = document.createElement("span");
+    this.draftNameEl.className = "le-draft-chip-name";
+
+    this.draftNameInput = document.createElement("input");
+    this.draftNameInput.type = "text";
+    this.draftNameInput.className = "le-draft-chip-name-input";
+    this.draftNameInput.style.display = "none";
+    this.draftNameInput.addEventListener("click", (e) => e.stopPropagation());
+    this.draftNameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") this._commitRename();
+      if (e.key === "Escape") this._cancelRename();
+    });
+    this.draftNameInput.addEventListener("blur", () => this._commitRename());
+
+    this.draftPillEl = document.createElement("span");
+    this.draftPillEl.className = "le-draft-chip-pill";
+    this.draftPillEl.textContent = t("layoutEditor.unsavedPill");
+
+    const caret = document.createElement("span");
+    caret.className = "le-draft-chip-caret";
+    caret.textContent = "▾";
+
+    chip.append(label, this.draftNameEl, this.draftNameInput, this.draftPillEl, caret);
+
+    this.draftMenuList = document.createElement("div");
+    this.draftMenuList.className = "sp-menu-list";
+    chip.appendChild(this.draftMenuList);
+
+    const closeMenu = () => chip.classList.remove("open");
+    chip.addEventListener("click", (e) => {
+      if (this.draftNameInput.style.display !== "none") return;
+      e.stopPropagation();
+      if (!chip.classList.contains("open")) this._refreshDraftMenu();
+      chip.classList.toggle("open");
+    });
+    document.addEventListener("click", (e) => {
+      if (!chip.contains(e.target)) closeMenu();
+    });
+    this._closeDraftMenu = closeMenu;
+    this.draftChipEl = chip;
+    return chip;
+  }
+
+  _refreshDraftMenu() {
+    this.draftMenuList.innerHTML = "";
+    const addItem = (text, onClick, danger = false) => {
+      const item = document.createElement("button");
+      item.className = "sp-menu-item";
+      item.type = "button";
+      if (danger) item.style.color = "var(--le-danger)";
+      item.textContent = text;
+      item.addEventListener("click", () => {
+        this._closeDraftMenu();
+        onClick();
+      });
+      this.draftMenuList.appendChild(item);
+    };
+    addItem(t("common.new"), () => this._newDraft());
+    addItem(t("layoutEditor.renameLayout"), () => this._startRename());
+    addItem(t("common.importEllipsis"), () => this._importLayout());
+    if (this._loadedLibraryId && getCustomLayout(this._loadedLibraryId)) {
+      addItem(t("common.deleteFromLibrary"), () => this._deleteLoadedFromLibrary(), true);
+    }
+    const entries = listCustomLayouts();
+    if (entries.length) {
+      const sep = document.createElement("div");
+      sep.style.height = "1px";
+      sep.style.background = "var(--le-border)";
+      sep.style.margin = "4px 2px";
+      this.draftMenuList.appendChild(sep);
+      entries.forEach((entry) => addItem(entry.name, () => this._loadLibraryEntry(entry)));
+    }
+  }
+
+  _newDraft() {
+    this._draftElements = buildDefaultCustomLayoutElements();
+    this._loadedLibraryId = null;
+    this._draftName = "";
+    this._dirty = false;
+    this._selectElement(null);
+    this._refreshDraftChip();
+    this._refreshLayersList();
+    this._renderCanvas();
+    this._renderOverlay();
+  }
+
+  _loadLibraryEntry(entry) {
+    this._loadedLibraryId = entry.id;
+    this._draftElements = entry.elements.map((el) => ({ ...el }));
+    this._draftName = entry.name;
+    this._dirty = false;
+    this._selectElement(null);
+    this._refreshDraftChip();
+    this._refreshLayersList();
+    this._renderCanvas();
+    this._renderOverlay();
+  }
+
+  _startRename() {
+    this.draftNameEl.style.display = "none";
+    this.draftNameInput.style.display = "";
+    this.draftNameInput.value = this._draftName;
+    this.draftNameInput.focus();
+    this.draftNameInput.select();
+  }
+
+  _commitRename() {
+    if (this.draftNameInput.style.display === "none") return;
+    this._draftName = this.draftNameInput.value.trim();
+    this.draftNameInput.style.display = "none";
+    this.draftNameEl.style.display = "";
+    this._refreshDraftChip();
+  }
+
+  _cancelRename() {
+    this.draftNameInput.style.display = "none";
+    this.draftNameEl.style.display = "";
+  }
+
+  _saveDraft() {
+    const name = this._draftName.trim() || "Custom Layout";
+    this._draftName = name;
+    if (this._loadedLibraryId && getCustomLayout(this._loadedLibraryId)) {
+      updateCustomLayout(this._loadedLibraryId, { name, elements: this._draftElements });
+    } else {
+      const entry = addCustomLayout({ name, elements: this._draftElements });
+      this._loadedLibraryId = entry.id;
+    }
+    this._dirty = false;
+    this._refreshDraftChip();
+  }
+
+  _deleteLoadedFromLibrary() {
+    if (!this._loadedLibraryId) return;
+    removeCustomLayout(this._loadedLibraryId);
+    this._loadedLibraryId = null;
+    this._refreshDraftChip();
+  }
+
+  async _importLayout() {
+    const entry = await this._importLayoutFromDialog();
+    if (!entry) return;
+    this._loadLibraryEntry(entry);
+  }
+
+  _refreshDraftChip() {
+    this.draftNameEl.textContent = this._draftName || t("layoutEditor.unsavedDraft");
+    const unsaved = !this._loadedLibraryId || this._dirty;
+    this.draftPillEl.style.display = unsaved ? "" : "none";
+  }
+
+  _markDirty() {
+    if (this._dirty) return;
+    this._dirty = true;
+    this._refreshDraftChip();
+  }
+
+  // "+ Shape" menu re-used both in the layers-rail footer and (via the same
+  // helper) nowhere else now — kept as its own builder since it also powers
+  // double-click-to-add-a-specific-kind from the footer.
   _buildShapeAddMenu() {
     const wrap = document.createElement("div");
-    wrap.className = "shape-add-menu";
+    wrap.className = "sp-menu menu-up";
 
     const menuBtn = document.createElement("button");
-    menuBtn.className = "shape-add-menu-trigger";
+    menuBtn.className = "le-layers-foot-btn";
     menuBtn.textContent = `${t("layoutEditor.addShape")} ▾`;
     wrap.appendChild(menuBtn);
 
     const list = document.createElement("div");
-    list.className = "shape-add-menu-list";
+    list.className = "sp-menu-list";
     list.setAttribute("role", "menu");
     list.setAttribute("aria-label", t("layoutEditor.addShapeMenuTitle"));
 
     const labels = shapeKindLabels();
     SHAPE_KINDS.forEach((kind) => {
       const item = document.createElement("button");
-      item.className = "shape-add-menu-item";
+      item.className = "sp-menu-item";
       item.type = "button";
       const icon = document.createElement("span");
-      icon.className = "shape-add-menu-item-icon";
+      icon.className = "sp-menu-item-icon";
       icon.textContent = SHAPE_KIND_ICONS[kind] || "";
       const label = document.createElement("span");
       label.textContent = labels[kind];
@@ -385,37 +494,28 @@ export class LayoutEditor {
     document.addEventListener("click", (e) => {
       if (!wrap.contains(e.target)) closeMenu();
     });
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && wrap.classList.contains("open")) {
-        e.stopPropagation();
-        closeMenu();
-      }
-    });
 
     return wrap;
   }
 
-  // "Export…" toolbar control: a small dropdown (same pattern as the
-  // "+ Shape" menu above) instead of a single button, so exporting can
-  // either save a local .splayout file or upload the layout straight to
-  // Streamplan Hub.
+  // "Exportieren ▾" topbar control: local file export or upload-to-Hub.
   _buildExportMenu() {
     const wrap = document.createElement("div");
-    wrap.className = "shape-add-menu";
+    wrap.className = "sp-menu";
 
     const menuBtn = document.createElement("button");
-    menuBtn.className = "shape-add-menu-trigger";
+    menuBtn.className = "le-btn-ghost";
     menuBtn.textContent = `${t("common.exportEllipsis")} ▾`;
     wrap.appendChild(menuBtn);
     this._exportMenuBtn = menuBtn;
 
     const list = document.createElement("div");
-    list.className = "shape-add-menu-list";
+    list.className = "sp-menu-list";
     list.setAttribute("role", "menu");
     list.setAttribute("aria-label", t("common.exportEllipsis"));
 
     const localItem = document.createElement("button");
-    localItem.className = "shape-add-menu-item";
+    localItem.className = "sp-menu-item";
     localItem.type = "button";
     localItem.textContent = t("common.exportLocalOption");
     localItem.addEventListener("click", () => {
@@ -425,7 +525,7 @@ export class LayoutEditor {
     list.appendChild(localItem);
 
     const uploadItem = document.createElement("button");
-    uploadItem.className = "shape-add-menu-item";
+    uploadItem.className = "sp-menu-item";
     uploadItem.type = "button";
     uploadItem.textContent = t("common.exportUploadOption");
     uploadItem.addEventListener("click", () => {
@@ -444,18 +544,12 @@ export class LayoutEditor {
     document.addEventListener("click", (e) => {
       if (!wrap.contains(e.target)) closeMenu();
     });
-    window.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && wrap.classList.contains("open")) {
-        e.stopPropagation();
-        closeMenu();
-      }
-    });
 
     return wrap;
   }
 
   async _exportLocal() {
-    const name = this.nameInput.value.trim() || "Custom Layout";
+    const name = this._draftName.trim() || "Custom Layout";
     const defaultName = `${sanitizeFilename(name)}${LAYOUT_FILE_EXTENSION}`;
     let targetPath;
     try {
@@ -483,7 +577,7 @@ export class LayoutEditor {
   // Layout": an unnamed upload would show up on the community site with
   // nothing to identify it by.
   async _uploadToHub() {
-    const name = this.nameInput.value.trim();
+    const name = this._draftName.trim();
     if (!name) {
       await window.streamplanAPI.showMessage("error", t("common.uploadNoNameTitle"), t("common.uploadNoNameError"));
       return;
@@ -508,59 +602,499 @@ export class LayoutEditor {
     }
   }
 
-  _buildPropertyPanel(container) {
-    this.propEmpty = document.createElement("div");
-    this.propEmpty.className = "field-hint";
-    this.propEmpty.textContent = t("layoutEditor.emptyHint");
-    container.appendChild(this.propEmpty);
+  // -- Layers rail --------------------------------------------------------
 
-    this.propTitle = document.createElement("div");
-    this.propTitle.className = "section-header";
-    container.appendChild(this.propTitle);
+  _buildLayersRail() {
+    const rail = document.createElement("div");
+    rail.className = "le-layers-rail";
+    this.layersRailEl = rail;
 
-    this.propFields = document.createElement("div");
-    this.propFields.style.display = "none";
-    container.appendChild(this.propFields);
+    const head = document.createElement("div");
+    head.className = "le-layers-head";
+    const heading = document.createElement("div");
+    heading.className = "le-layers-title";
+    heading.textContent = t("layoutEditor.layersHeader");
+    const hint = document.createElement("div");
+    hint.className = "le-layers-hint le-mono";
+    hint.textContent = t("layoutEditor.layersHint");
+    head.append(heading, hint);
+    rail.appendChild(head);
 
-    const makeNumberRow = (labelText, min, max, step, onChange) => {
-      const wrap = document.createElement("div");
-      wrap.style.marginBottom = "12px";
-      const label = document.createElement("label");
-      label.className = "field-label";
-      label.textContent = labelText;
-      wrap.appendChild(label);
-      const input = document.createElement("input");
-      input.type = "number";
-      input.min = String(min);
-      input.max = String(max);
-      input.step = String(step);
-      input.addEventListener("input", () => {
-        const v = Number(input.value);
-        if (Number.isFinite(v)) onChange(v);
+    this.layersListEl = document.createElement("div");
+    this.layersListEl.className = "le-layers-list";
+    rail.appendChild(this.layersListEl);
+
+    const foot = document.createElement("div");
+    foot.className = "le-layers-foot";
+    const addTextBtn = document.createElement("button");
+    addTextBtn.className = "le-layers-foot-btn";
+    addTextBtn.textContent = t("layoutEditor.addText");
+    addTextBtn.addEventListener("click", () => this._addFreeformElement("text"));
+    foot.appendChild(addTextBtn);
+    foot.appendChild(this._buildShapeAddMenu());
+    const addImageBtn = document.createElement("button");
+    addImageBtn.className = "le-layers-foot-btn";
+    addImageBtn.textContent = t("layoutEditor.addImage");
+    addImageBtn.addEventListener("click", async () => {
+      let path;
+      try {
+        path = await window.streamplanAPI.chooseAssetPath("sticker");
+      } catch (err) {
+        await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("common.fileDialogError", { message: err.message }));
+        return;
+      }
+      if (!path) return;
+      this._addFreeformElement("image", { imagePath: path });
+    });
+    foot.appendChild(addImageBtn);
+    rail.appendChild(foot);
+
+    return rail;
+  }
+
+  _refreshLayersList() {
+    this.layersListEl.innerHTML = "";
+    // Top of list = front = end of the array (see _bringToFront/_sendToBack).
+    const ordered = [...this._draftElements].reverse();
+    ordered.forEach((el) => {
+      if (el.type === "dayTime") return; // rendered as a sub-row of its parent card
+      this.layersListEl.appendChild(this._buildLayerRow(el));
+      if (el.type === "dayCard" && el.id === this._selectedId) {
+        this._draftElements
+          .filter((e) => e.type === "dayTime" && e.dayKey === el.id)
+          .forEach((sub) => this.layersListEl.appendChild(this._buildLayerSubRow(sub)));
+      }
+    });
+    this._refreshElementCount();
+  }
+
+  _buildLayerRow(el) {
+    const row = document.createElement("div");
+    row.className = "le-layer-row" + (el.id === this._selectedId ? " selected" : "");
+    row.draggable = true;
+    row.dataset.elId = el.id;
+
+    const handle = document.createElement("span");
+    handle.className = "le-layer-handle";
+    handle.textContent = "⠿";
+
+    const glyph = document.createElement("span");
+    glyph.className = "le-layer-glyph" + (el.type === "logo" || el.type === "header" ? " accent" : "");
+    glyph.textContent = LAYER_TYPE_GLYPHS[el.type] || "▭";
+
+    const name = document.createElement("span");
+    name.className = "le-layer-name";
+    name.textContent = elementLabel(el);
+
+    row.append(handle, glyph, name);
+
+    if (el.type === "dayCard") {
+      const badge = document.createElement("span");
+      badge.className = "le-layer-badge le-mono";
+      badge.textContent = "+2";
+      row.appendChild(badge);
+    } else {
+      const vis = document.createElement("button");
+      vis.className = "le-layer-visibility";
+      vis.type = "button";
+      vis.textContent = "◉";
+      vis.title = t("common.opacity");
+      vis.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (this._hiddenIds?.has(el.id)) this._hiddenIds.delete(el.id);
+        else (this._hiddenIds ??= new Set()).add(el.id);
+        vis.style.opacity = this._hiddenIds?.has(el.id) ? "0.35" : "";
+        this._renderCanvas();
       });
-      wrap.appendChild(input);
-      this.propFields.appendChild(wrap);
-      return input;
-    };
+      row.appendChild(vis);
+    }
 
-    // Ranges intentionally extend well past 0-100%: elements can be
-    // dragged/resized to bleed off the canvas edges or be dramatically
-    // over/undersized, for whatever creative effect the user is after.
-    this.inputX = makeNumberRow(t("layoutEditor.posXLabel"), -50, 150, 0.1, (v) => this._setSelectedField("cx", v / 100));
-    this.inputY = makeNumberRow(t("layoutEditor.posYLabel"), -50, 150, 0.1, (v) => this._setSelectedField("cy", v / 100));
-    this.inputW = makeNumberRow(t("layoutEditor.widthLabel"), 2, 250, 0.1, (v) => this._setSelectedField("w", v / 100));
-    this.inputH = makeNumberRow(t("layoutEditor.heightLabel"), 2, 250, 0.1, (v) => this._setSelectedField("h", v / 100));
-    this.inputRot = makeNumberRow(t("layoutEditor.rotationLabel"), -180, 180, 1, (v) => this._setSelectedField("rotation", v));
+    row.addEventListener("click", () => this._selectElement(el.id));
+    row.addEventListener("dragstart", (e) => {
+      this._dragLayerId = el.id;
+      row.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+    });
+    row.addEventListener("dragend", () => {
+      row.classList.remove("dragging");
+      this._dragLayerId = null;
+    });
+    row.addEventListener("dragover", (e) => {
+      if (!this._dragLayerId || this._dragLayerId === el.id) return;
+      e.preventDefault();
+    });
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      this._reorderLayer(this._dragLayerId, el.id);
+    });
 
-    // -- Per-element style overrides — every element starts inheriting the
-    // template's global look, so a fresh layout renders identically to
-    // before any of this is touched; each control here diverges just that
-    // one element from the template on demand.
-    const styleHeader = document.createElement("div");
-    styleHeader.className = "section-header";
-    styleHeader.textContent = t("layoutEditor.elementStyleHeader");
-    this.propFields.appendChild(styleHeader);
+    return row;
+  }
 
+  _buildLayerSubRow(el) {
+    const row = document.createElement("div");
+    row.className = "le-layer-sub";
+    const arrow = document.createElement("span");
+    arrow.className = "le-layer-sub-arrow";
+    arrow.textContent = "↳";
+    const text = document.createElement("span");
+    text.className = "le-layer-sub-text";
+    text.textContent = elementLabel(el);
+    row.append(arrow, text);
+    row.addEventListener("click", () => this._selectElement(el.id));
+    return row;
+  }
+
+  // Dropping `draggedId`'s row onto `targetId`'s row moves it to sit
+  // directly after target in the array (array order = z-order, array end =
+  // front — see _bringToFront/_sendToBack), matching "top of the (reversed)
+  // list = front" from the layers rail's own ordering.
+  _reorderLayer(draggedId, targetId) {
+    if (!draggedId || draggedId === targetId) return;
+    const fromIdx = this._draftElements.findIndex((e) => e.id === draggedId);
+    const toIdx = this._draftElements.findIndex((e) => e.id === targetId);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const [el] = this._draftElements.splice(fromIdx, 1);
+    const insertAt = this._draftElements.findIndex((e) => e.id === targetId);
+    this._draftElements.splice(insertAt + 1, 0, el);
+    this._markDirty();
+    this._refreshLayersList();
+    this._renderCanvas();
+    this._renderOverlay();
+  }
+
+  _refreshElementCount() {
+    const fixed = this._draftElements.filter((el) => CUSTOM_LAYOUT_ELEMENT_IDS.includes(el.id) && el.type !== "dayTime").length;
+    const times = this._draftElements.filter((el) => el.type === "dayTime").length;
+    const extra = this._draftElements.filter((el) => FREEFORM_ELEMENT_TYPES.includes(el.type)).length;
+    this.elementCountEl.textContent = t("layoutEditor.elementCount", { fixed, times, extra });
+  }
+
+  // -- Canvas area --------------------------------------------------------
+
+  _buildCanvasArea() {
+    const area = document.createElement("div");
+    area.className = "le-canvas-area";
+
+    this.gridEl = document.createElement("div");
+    this.gridEl.className = "le-grid";
+    area.appendChild(this.gridEl);
+
+    this.canvasWrap = document.createElement("div");
+    this.canvasWrap.className = "le-canvas-wrap";
+
+    this.canvasEl = document.createElement("canvas");
+    this.canvasEl.className = "le-canvas";
+    this.canvasWrap.appendChild(this.canvasEl);
+
+    this.overlayLayer = document.createElement("div");
+    this.overlayLayer.className = "le-overlay-layer";
+    this.canvasWrap.appendChild(this.overlayLayer);
+
+    this.snapGuideV = document.createElement("div");
+    this.snapGuideV.className = "le-snap-guide vertical";
+    this.snapGuideV.style.display = "none";
+    this.snapGuideH = document.createElement("div");
+    this.snapGuideH.className = "le-snap-guide horizontal";
+    this.snapGuideH.style.display = "none";
+    this.canvasWrap.append(this.snapGuideV, this.snapGuideH);
+
+    this.hudEl = document.createElement("div");
+    this.hudEl.className = "le-hud";
+    const hudRow1 = document.createElement("div");
+    hudRow1.className = "le-hud-row";
+    this.hudX = this._hudSpan("X");
+    this.hudY = this._hudSpan("Y");
+    hudRow1.append(this.hudX.axis, this.hudX.value, this.hudY.axis, this.hudY.value);
+    const hudRow2 = document.createElement("div");
+    hudRow2.className = "le-hud-row";
+    this.hudW = this._hudSpan("B");
+    this.hudH = this._hudSpan("H");
+    hudRow2.append(this.hudW.axis, this.hudW.value, this.hudH.axis, this.hudH.value);
+    const hudDivider = document.createElement("div");
+    hudDivider.className = "le-hud-divider";
+    const hudActions = document.createElement("div");
+    hudActions.className = "le-hud-actions";
+    const frontBtn = document.createElement("button");
+    frontBtn.className = "le-hud-btn";
+    frontBtn.textContent = "⬆";
+    frontBtn.title = t("layoutEditor.bringFront");
+    frontBtn.addEventListener("click", () => this._bringToFront(this._selectedId));
+    const backBtn = document.createElement("button");
+    backBtn.className = "le-hud-btn";
+    backBtn.textContent = "⬇";
+    backBtn.title = t("layoutEditor.sendBack");
+    backBtn.addEventListener("click", () => this._sendToBack(this._selectedId));
+    const dupBtn = document.createElement("button");
+    dupBtn.className = "le-hud-btn";
+    dupBtn.textContent = "⧉";
+    dupBtn.title = t("layoutEditor.duplicate");
+    dupBtn.addEventListener("click", () => this._duplicateSelected());
+    hudActions.append(frontBtn, backBtn, dupBtn);
+    this.hudEl.append(hudRow1, hudRow2, hudDivider, hudActions);
+    this.canvasWrap.appendChild(this.hudEl);
+
+    area.appendChild(this.canvasWrap);
+    area.appendChild(this._buildStatusPill());
+
+    this.canvasWrap.addEventListener("pointerdown", (e) => {
+      if (e.target === this.canvasWrap || e.target === this.canvasEl) this._selectElement(null);
+    });
+
+    return area;
+  }
+
+  _hudSpan(axisText) {
+    const axis = document.createElement("span");
+    axis.className = "le-hud-axis";
+    axis.textContent = axisText;
+    const value = document.createElement("span");
+    return { axis, value };
+  }
+
+  _buildStatusPill() {
+    const pill = document.createElement("div");
+    pill.className = "le-status-pill";
+
+    const dims = document.createElement("span");
+    dims.className = "le-status-item";
+    dims.textContent = `${CANVAS_WIDTH} × ${CANVAS_HEIGHT}`;
+    pill.appendChild(dims);
+    pill.appendChild(this._statusSep());
+
+    this.gridToggleEl = document.createElement("button");
+    this.gridToggleEl.className = "le-status-item clickable";
+    this.gridToggleEl.addEventListener("click", () => {
+      this._gridVisible = !this._gridVisible;
+      this._syncStatusPill();
+    });
+    pill.appendChild(this.gridToggleEl);
+    pill.appendChild(this._statusSep());
+
+    this.snapToggleEl = document.createElement("button");
+    this.snapToggleEl.className = "le-status-item clickable";
+    this.snapToggleEl.addEventListener("click", () => {
+      this._snapEnabled = !this._snapEnabled;
+      this._syncStatusPill();
+    });
+    pill.appendChild(this.snapToggleEl);
+
+    this._syncStatusPill();
+    return pill;
+  }
+
+  _statusSep() {
+    const sep = document.createElement("span");
+    sep.className = "le-status-sep";
+    return sep;
+  }
+
+  _syncStatusPill() {
+    this.gridEl.classList.toggle("hidden", !this._gridVisible);
+    this.gridToggleEl.textContent = t("layoutEditor.gridToggle", { size: GRID_SIZE_PX });
+    this.gridToggleEl.classList.toggle("on", this._gridVisible);
+    this.snapToggleEl.textContent = this._snapEnabled ? t("layoutEditor.snapOn") : t("layoutEditor.snapOff");
+    this.snapToggleEl.classList.toggle("on", this._snapEnabled);
+  }
+
+  // -- Transform bar --------------------------------------------------------
+
+  _buildTransformBar() {
+    const bar = document.createElement("div");
+    bar.className = "le-transformbar";
+    this.transformBarEl = bar;
+
+    this.tbEmptyEl = document.createElement("div");
+    this.tbEmptyEl.className = "le-tb-empty";
+    this.tbEmptyEl.textContent = t("layoutEditor.emptyHint");
+    bar.appendChild(this.tbEmptyEl);
+
+    this.tbFieldsEl = document.createElement("div");
+    this.tbFieldsEl.style.display = "none";
+    this.tbFieldsEl.style.alignItems = "center";
+    this.tbFieldsEl.style.gap = "8px";
+    this.tbFieldsEl.style.flex = "1";
+    this.tbFieldsEl.style.minWidth = "0";
+    this.tbFieldsEl.style.overflowX = "auto";
+
+    this.tbNameEl = document.createElement("div");
+    this.tbNameEl.className = "le-tb-name";
+    this.tbFieldsEl.appendChild(this.tbNameEl);
+
+    const numberGroup = document.createElement("div");
+    numberGroup.className = "le-tb-group";
+    this.inputX = this._tbAxisInput(numberGroup, "X", (v) => this._setSelectedField("cx", v / 100));
+    this.inputY = this._tbAxisInput(numberGroup, "Y", (v) => this._setSelectedField("cy", v / 100));
+    numberGroup.appendChild(this._tbSep());
+    this.inputW = this._tbAxisInput(numberGroup, "B", (v) => this._setSelectedField("w", v / 100));
+    this.inputH = this._tbAxisInput(numberGroup, "H", (v) => this._setSelectedField("h", v / 100));
+    numberGroup.appendChild(this._tbSep());
+    this.inputRot = this._tbAxisInput(numberGroup, "°", (v) => this._setSelectedField("rotation", v), true);
+    this.tbFieldsEl.appendChild(numberGroup);
+
+    this.tbFieldsEl.appendChild(this._buildAlignGroup());
+    this.tbFieldsEl.appendChild(this._buildOpacityGroup());
+
+    this.tbChipsWrap = document.createElement("div");
+    this.tbChipsWrap.style.display = "flex";
+    this.tbChipsWrap.style.alignItems = "center";
+    this.tbChipsWrap.style.gap = "8px";
+    this.tbFieldsEl.appendChild(this.tbChipsWrap);
+
+    const tbSpacer = document.createElement("div");
+    tbSpacer.style.flex = "1";
+    this.tbFieldsEl.appendChild(tbSpacer);
+
+    this.deleteElementBtn = document.createElement("button");
+    this.deleteElementBtn.className = "le-tb-delete";
+    this.deleteElementBtn.textContent = t("layoutEditor.deleteElementBtn");
+    this.deleteElementBtn.addEventListener("click", () => this._deleteSelectedElement());
+    this.tbFieldsEl.appendChild(this.deleteElementBtn);
+
+    bar.appendChild(this.tbFieldsEl);
+
+    // Appended to the transform bar itself (not the scrolling .tbFieldsEl
+    // row) and positioned via JS (position: fixed) — the row's
+    // overflow-x: auto implicitly clips overflow-y too, which would hide
+    // any absolutely-positioned popover nested inside it.
+    this.popoverEl = document.createElement("div");
+    this.popoverEl.className = "le-popover";
+    bar.appendChild(this.popoverEl);
+
+    document.addEventListener("click", (e) => {
+      if (this._openPopoverKey && !this.popoverEl.contains(e.target) && !this.tbChipsWrap.contains(e.target)) {
+        this._closePopover();
+      }
+    });
+
+    return bar;
+  }
+
+  _tbSep() {
+    const sep = document.createElement("div");
+    sep.className = "le-tb-sep";
+    return sep;
+  }
+
+  _tbAxisInput(container, axisText, onChange, isRotation = false) {
+    const axis = document.createElement("span");
+    axis.className = "le-tb-axis";
+    axis.textContent = axisText;
+    const input = document.createElement("input");
+    input.type = "number";
+    input.className = "le-tb-input" + (isRotation ? " rotation" : "");
+    input.addEventListener("input", () => {
+      const v = Number(input.value);
+      if (Number.isFinite(v)) onChange(v);
+    });
+    container.append(axis, input);
+    return input;
+  }
+
+  _buildAlignGroup() {
+    const group = document.createElement("div");
+    group.className = "le-tb-group le-tb-align";
+    const buttons = [
+      ["⇤", t("layoutEditor.alignLeftEdge"), () => this._alignSelected("left")],
+      ["⇔", t("layoutEditor.alignCenterH"), () => this._alignSelected("centerH")],
+      ["⇥", t("layoutEditor.alignRightEdge"), () => this._alignSelected("right")],
+      ["⤒", t("layoutEditor.alignTopEdge"), () => this._alignSelected("top")],
+      ["⤓", t("layoutEditor.alignBottomEdge"), () => this._alignSelected("bottom")],
+    ];
+    buttons.forEach(([glyph, title, onClick]) => {
+      const btn = document.createElement("button");
+      btn.className = "le-tb-align-btn";
+      btn.textContent = glyph;
+      btn.title = title;
+      btn.addEventListener("click", onClick);
+      group.appendChild(btn);
+    });
+    return group;
+  }
+
+  _buildOpacityGroup() {
+    const group = document.createElement("div");
+    group.className = "le-tb-group le-tb-opacity";
+    const label = document.createElement("label");
+    label.textContent = t("common.opacity");
+    this.inputOpacity = document.createElement("input");
+    this.inputOpacity.type = "range";
+    this.inputOpacity.min = "5";
+    this.inputOpacity.max = "100";
+    this.opacityValueEl = document.createElement("span");
+    this.opacityValueEl.className = "le-tb-value le-mono";
+    this.inputOpacity.addEventListener("input", () => {
+      this.opacityValueEl.textContent = `${this.inputOpacity.value}%`;
+      this._setSelectedField("opacity", Number(this.inputOpacity.value) / 100);
+    });
+    group.append(label, this.inputOpacity, this.opacityValueEl);
+    return group;
+  }
+
+  _buildChip(labelKey, valueText, popoverKey) {
+    const chip = document.createElement("div");
+    chip.className = "le-tb-group le-tb-chip";
+    const label = document.createElement("span");
+    label.className = "le-tb-chip-label";
+    label.textContent = t(labelKey);
+    const value = document.createElement("span");
+    value.className = "le-tb-chip-value";
+    value.textContent = valueText;
+    const caret = document.createElement("span");
+    caret.className = "le-tb-chip-caret";
+    caret.textContent = "▾";
+    chip.append(label, value, caret);
+    chip.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._togglePopover(popoverKey, chip);
+    });
+    return chip;
+  }
+
+  _togglePopover(key, chip) {
+    if (this._openPopoverKey === key) {
+      this._closePopover();
+      return;
+    }
+    this._openPopover(key, chip);
+  }
+
+  _openPopover(key, chip) {
+    this.popoverEl.innerHTML = "";
+    const section = this._popoverSections[key];
+    if (!section) return;
+    this.popoverEl.appendChild(section);
+    this.popoverEl.classList.add("open");
+    this._openPopoverKey = key;
+
+    const barRect = this.transformBarEl.getBoundingClientRect();
+    const anchorRect = chip ? chip.getBoundingClientRect() : barRect;
+    // Measure after the content swap above so the popover's real height is
+    // known; position: fixed avoids the transform bar's own
+    // overflow-x: auto (which implicitly clips overflow-y too) hiding it.
+    const popRect = this.popoverEl.getBoundingClientRect();
+    let left = anchorRect.left;
+    left = Math.min(left, window.innerWidth - popRect.width - 12);
+    left = Math.max(left, 12);
+    this.popoverEl.style.left = `${left}px`;
+    this.popoverEl.style.bottom = `${window.innerHeight - barRect.top + 8}px`;
+  }
+
+  _closePopover() {
+    this.popoverEl.classList.remove("open");
+    this._openPopoverKey = null;
+  }
+
+  // Builds every type-specific field group once (as standalone containers)
+  // so opening a popover just re-parents the right one in — this reuses all
+  // the original property-panel field-building logic verbatim instead of
+  // rewriting it, and keeps every existing setter/validation path intact.
+  _buildPropertySections() {
+    this._popoverSections = {};
+
+    // -- "Ecken" (corner style + accent stripe/color, dayCard/header/rect-shape)
+    const cornerSection = document.createElement("div");
+    this._appendSectionHeader(cornerSection, t("layoutEditor.elementStyleHeader"));
     this.cornerWrap = document.createElement("div");
     this.cornerWrap.style.marginBottom = "12px";
     const cornerLabel = document.createElement("label");
@@ -581,7 +1115,7 @@ export class LayoutEditor {
     });
     this.cornerSelect.addEventListener("change", () => this._setSelectedField("cornerStyle", this.cornerSelect.value || null));
     this.cornerWrap.appendChild(this.cornerSelect);
-    this.propFields.appendChild(this.cornerWrap);
+    cornerSection.appendChild(this.cornerWrap);
 
     this.stripeWrap = document.createElement("div");
     this.stripeWrap.style.marginBottom = "12px";
@@ -594,7 +1128,7 @@ export class LayoutEditor {
     stripeText.textContent = t("layoutEditor.showStripeLabel");
     stripeLabel.append(this.stripeCheckbox, stripeText);
     this.stripeWrap.appendChild(stripeLabel);
-    this.propFields.appendChild(this.stripeWrap);
+    cornerSection.appendChild(this.stripeWrap);
 
     this.accentWrap = document.createElement("div");
     this.accentWrap.style.marginBottom = "12px";
@@ -615,35 +1149,207 @@ export class LayoutEditor {
     accentResetBtn.addEventListener("click", () => this._setSelectedField("accentColor", null));
     accentRow.append(this.accentColorInput, accentResetBtn);
     this.accentWrap.appendChild(accentRow);
-    this.propFields.appendChild(this.accentWrap);
+    cornerSection.appendChild(this.accentWrap);
+    this._popoverSections.corner = cornerSection;
 
-    this.inputOpacity = makeNumberRow(t("layoutEditor.opacityLabel"), 5, 100, 1, (v) => this._setSelectedField("opacity", v / 100));
+    // -- "Design" (card skin, dayCard only)
+    const designSection = document.createElement("div");
+    this._appendSectionHeader(designSection, t("layoutEditor.cardSkinHeader"));
+    const labels = cardStyleLabels();
+    const { wrap: cardStyleWrap, select: cardStyleSelect } = this._appendSelectRow(
+      designSection,
+      t("layoutEditor.skinLabel"),
+      CARD_STYLES.map((v) => [v === "classic" ? "" : v, labels[v]]),
+      (value) => this._setSelectedField("cardStyle", value || null)
+    );
+    this.cardStyleWrap = cardStyleWrap;
+    this.cardStyleSelect = cardStyleSelect;
+    this._popoverSections.design = designSection;
 
-    this.zOrderRow = document.createElement("div");
-    this.zOrderRow.className = "asset-actions";
-    this.zOrderRow.style.marginTop = "6px";
-    const bringFrontBtn = document.createElement("button");
-    bringFrontBtn.textContent = t("layoutEditor.bringFront");
-    bringFrontBtn.addEventListener("click", () => this._bringToFront(this._selectedId));
-    const sendBackBtn = document.createElement("button");
-    sendBackBtn.textContent = t("layoutEditor.sendBack");
-    sendBackBtn.addEventListener("click", () => this._sendToBack(this._selectedId));
-    this.zOrderRow.append(bringFrontBtn, sendBackBtn);
-    this.propFields.appendChild(this.zOrderRow);
+    // -- "Schrift" (font override — dayCard/header/text/dayTime)
+    const fontSection = document.createElement("div");
+    this._appendSectionHeader(fontSection, t("layoutEditor.fontHeader"));
+    this.fontWrap = document.createElement("div");
+    this.fontWrap.style.marginBottom = "12px";
+    this.fontFilenameEl = document.createElement("div");
+    this.fontFilenameEl.className = "field-hint";
+    this.fontWrap.appendChild(this.fontFilenameEl);
+    this.fontLibrarySelect = document.createElement("select");
+    this.fontLibrarySelect.title = t("layoutEditor.fontLibraryTitle");
+    this.fontLibrarySelect.addEventListener("change", () => {
+      const path = this.fontLibrarySelect.value;
+      if (!path) return;
+      const entry = listCustomFonts().find((f) => f.path === path);
+      if (!entry) return;
+      this._setSelectedField("fontFamily", entry.family);
+      this._setSelectedField("fontPath", entry.path);
+      this._refreshTransformBar();
+    });
+    this.fontWrap.appendChild(this.fontLibrarySelect);
+    const fontBtnRow = document.createElement("div");
+    fontBtnRow.className = "asset-actions";
+    fontBtnRow.style.marginTop = "6px";
+    const fontUploadBtn = document.createElement("button");
+    fontUploadBtn.textContent = t("common.uploadFont");
+    fontUploadBtn.addEventListener("click", async () => {
+      const prevText = fontUploadBtn.textContent;
+      fontUploadBtn.disabled = true;
+      fontUploadBtn.textContent = t("common.loading");
+      try {
+        const path = await window.streamplanAPI.chooseAssetPath("font");
+        if (path) {
+          const entry = await addCustomFontToLibrary(path);
+          this._setSelectedField("fontFamily", entry.family);
+          this._setSelectedField("fontPath", entry.path);
+          this._refreshFontLibrarySelect();
+          this._refreshTransformBar();
+        }
+      } catch (err) {
+        await window.streamplanAPI.showMessage("error", t("layoutEditor.fontUploadFailedTitle"), err.message);
+      } finally {
+        fontUploadBtn.disabled = false;
+        fontUploadBtn.textContent = prevText;
+      }
+    });
+    const fontResetBtn = document.createElement("button");
+    fontResetBtn.textContent = t("layoutEditor.useTemplateFontBtn");
+    fontResetBtn.addEventListener("click", () => {
+      this._setSelectedField("fontFamily", null);
+      this._setSelectedField("fontPath", null);
+      this._refreshTransformBar();
+    });
+    fontBtnRow.append(fontUploadBtn, fontResetBtn);
+    this.fontWrap.appendChild(fontBtnRow);
+    fontSection.appendChild(this.fontWrap);
+    this._popoverSections.font = fontSection;
 
-    this._buildCardStyleSection();
-    this._buildFontSection();
-    this._buildAnimationSection();
-    this._buildTextSection();
-    this._buildShapeSection();
-    this._buildImageSection();
-    this._buildDeleteSection();
+    // -- "Animation" (all types)
+    const animSection = document.createElement("div");
+    this._appendSectionHeader(animSection, t("layoutEditor.animationHeader"));
+    const animLabels = animStyleLabels();
+    const { select: animSelect } = this._appendSelectRow(
+      animSection,
+      t("layoutEditor.animStyleLabel"),
+      ELEMENT_ANIM_STYLES.map((v) => [v === "none" ? "" : v, animLabels[v]]),
+      (value) => this._setSelectedField("animStyle", value || null)
+    );
+    this.animSelect = animSelect;
+    const intensityLabels = animIntensityLabels();
+    const { select: intensitySelect } = this._appendSelectRow(
+      animSection,
+      t("layoutEditor.intensityLabel"),
+      ELEMENT_ANIM_INTENSITIES.map((v) => [v, intensityLabels[v]]),
+      (value) => this._setSelectedField("animIntensity", value)
+    );
+    this.animIntensitySelect = intensitySelect;
+    this._popoverSections.animation = animSection;
+
+    // -- "Inhalt" (type-specific content — text/shape/image)
+    const contentSection = document.createElement("div");
+    this.textFieldsWrap = document.createElement("div");
+    this._appendSectionHeader(this.textFieldsWrap, t("layoutEditor.textContentHeader"));
+    const textAreaWrap = document.createElement("div");
+    textAreaWrap.style.marginBottom = "12px";
+    const textLabel = document.createElement("label");
+    textLabel.className = "field-label";
+    textLabel.textContent = t("layoutEditor.textLabel");
+    textAreaWrap.appendChild(textLabel);
+    this.textArea = document.createElement("textarea");
+    this.textArea.rows = 3;
+    this.textArea.addEventListener("input", () => this._setSelectedField("text", this.textArea.value));
+    textAreaWrap.appendChild(this.textArea);
+    this.textFieldsWrap.appendChild(textAreaWrap);
+    const { select: alignSelect } = this._appendSelectRow(
+      this.textFieldsWrap,
+      t("layoutEditor.alignmentLabel"),
+      [
+        ["left", t("layoutEditor.alignLeft")],
+        ["center", t("layoutEditor.alignCenter")],
+        ["right", t("layoutEditor.alignRight")],
+      ],
+      (value) => this._setSelectedField("align", value)
+    );
+    this.textAlignSelect = alignSelect;
+    const { input: colorInput } = this._appendColorRow(
+      this.textFieldsWrap,
+      t("layoutEditor.textColorLabel"),
+      (value) => this._setSelectedField("color", value),
+      () => this._setSelectedField("color", null)
+    );
+    this.textColorInput = colorInput;
+    const { input: sizeInput } = this._appendNumberRow(this.textFieldsWrap, t("layoutEditor.fontSizeLabel"), 1, 30, 0.5, (v) =>
+      this._setSelectedField("fontSize", v / 100)
+    );
+    this.textSizeInput = sizeInput;
+    contentSection.appendChild(this.textFieldsWrap);
+
+    this.shapeFieldsWrap = document.createElement("div");
+    this._appendSectionHeader(this.shapeFieldsWrap, t("layoutEditor.shapeHeader"));
+    const shapeLabels = shapeKindLabels();
+    const { select: kindSelect } = this._appendSelectRow(
+      this.shapeFieldsWrap,
+      t("layoutEditor.shapeKindLabel"),
+      SHAPE_KINDS.map((kind) => [kind, shapeLabels[kind]]),
+      (value) => this._setSelectedField("shapeKind", value)
+    );
+    this.shapeKindSelect = kindSelect;
+    const { input: fillInput } = this._appendColorRow(
+      this.shapeFieldsWrap,
+      t("layoutEditor.fillColorLabel"),
+      (value) => this._setSelectedField("fillColor", value),
+      () => this._setSelectedField("fillColor", null)
+    );
+    this.shapeFillInput = fillInput;
+    const { input: strokeInput } = this._appendColorRow(
+      this.shapeFieldsWrap,
+      t("layoutEditor.strokeColorLabel"),
+      (value) => this._setSelectedField("strokeColor", value),
+      () => this._setSelectedField("strokeColor", null)
+    );
+    this.shapeStrokeInput = strokeInput;
+    const { input: strokeWidthInput } = this._appendNumberRow(this.shapeFieldsWrap, t("layoutEditor.strokeWidthLabel"), 0, 60, 1, (v) =>
+      this._setSelectedField("strokeWidth", v)
+    );
+    this.shapeStrokeWidthInput = strokeWidthInput;
+    contentSection.appendChild(this.shapeFieldsWrap);
+
+    this.imageFieldsWrap = document.createElement("div");
+    this._appendSectionHeader(this.imageFieldsWrap, t("layoutEditor.imageHeader"));
+    this.imageFilenameEl = document.createElement("div");
+    this.imageFilenameEl.className = "field-hint";
+    this.imageFieldsWrap.appendChild(this.imageFilenameEl);
+    const imageBtnRow = document.createElement("div");
+    imageBtnRow.className = "asset-actions";
+    imageBtnRow.style.marginTop = "6px";
+    const imageUploadBtn = document.createElement("button");
+    imageUploadBtn.textContent = t("layoutEditor.replaceImageBtn");
+    imageUploadBtn.addEventListener("click", async () => {
+      let path;
+      try {
+        path = await window.streamplanAPI.chooseAssetPath("sticker");
+      } catch (err) {
+        await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("common.fileDialogError", { message: err.message }));
+        return;
+      }
+      if (path) {
+        this._setSelectedField("imagePath", path);
+        this._refreshTransformBar();
+      }
+    });
+    imageBtnRow.appendChild(imageUploadBtn);
+    this.imageFieldsWrap.appendChild(imageBtnRow);
+    contentSection.appendChild(this.imageFieldsWrap);
+    this._popoverSections.content = contentSection;
   }
 
-  // Small local variant of the shared makeNumberRow above, but appending
-  // into an arbitrary container (a type-specific field group) instead of
-  // always this.propFields directly, and returning the wrapper div too so
-  // callers can toggle its visibility per element type.
+  _appendSectionHeader(container, text) {
+    const header = document.createElement("div");
+    header.className = "section-header";
+    header.textContent = text;
+    container.appendChild(header);
+    return header;
+  }
+
   _appendNumberRow(container, labelText, min, max, step, onChange) {
     const wrap = document.createElement("div");
     wrap.style.marginBottom = "12px";
@@ -712,93 +1418,6 @@ export class LayoutEditor {
     return { wrap, input };
   }
 
-  // DayCard-only: lets a card borrow the visual look of one of the app's
-  // other built-in layouts instead of the plain default panel.
-  _buildCardStyleSection() {
-    const header = document.createElement("div");
-    header.className = "section-header";
-    header.textContent = t("layoutEditor.cardSkinHeader");
-    this.cardSkinSectionHeader = header;
-    this.propFields.appendChild(header);
-    const labels = cardStyleLabels();
-    const { wrap, select } = this._appendSelectRow(
-      this.propFields,
-      t("layoutEditor.skinLabel"),
-      CARD_STYLES.map((v) => [v === "classic" ? "" : v, labels[v]]),
-      (value) => this._setSelectedField("cardStyle", value || null)
-    );
-    this.cardStyleWrap = wrap;
-    this.cardStyleSelect = select;
-  }
-
-  // Font override — meaningful for dayCard/header/text (anything that
-  // draws text) — mirrors assetsTab.js's buildFontAssetCard upload/reset
-  // pattern, plus a dropdown of already-uploaded fonts so one doesn't need
-  // to be re-picked from disk if it's already in the library.
-  _buildFontSection() {
-    const header = document.createElement("div");
-    header.className = "section-header";
-    header.textContent = t("layoutEditor.fontHeader");
-    this.fontSectionHeader = header;
-    this.propFields.appendChild(header);
-
-    this.fontWrap = document.createElement("div");
-    this.fontWrap.style.marginBottom = "12px";
-
-    this.fontFilenameEl = document.createElement("div");
-    this.fontFilenameEl.className = "field-hint";
-    this.fontWrap.appendChild(this.fontFilenameEl);
-
-    this.fontLibrarySelect = document.createElement("select");
-    this.fontLibrarySelect.title = t("layoutEditor.fontLibraryTitle");
-    this.fontLibrarySelect.addEventListener("change", () => {
-      const path = this.fontLibrarySelect.value;
-      if (!path) return;
-      const entry = listCustomFonts().find((f) => f.path === path);
-      if (!entry) return;
-      this._setSelectedField("fontFamily", entry.family);
-      this._setSelectedField("fontPath", entry.path);
-      this._refreshPropertyPanel();
-    });
-    this.fontWrap.appendChild(this.fontLibrarySelect);
-
-    const fontBtnRow = document.createElement("div");
-    fontBtnRow.className = "asset-actions";
-    fontBtnRow.style.marginTop = "6px";
-    const fontUploadBtn = document.createElement("button");
-    fontUploadBtn.textContent = t("common.uploadFont");
-    fontUploadBtn.addEventListener("click", async () => {
-      const prevText = fontUploadBtn.textContent;
-      fontUploadBtn.disabled = true;
-      fontUploadBtn.textContent = t("common.loading");
-      try {
-        const path = await window.streamplanAPI.chooseAssetPath("font");
-        if (path) {
-          const entry = await addCustomFontToLibrary(path);
-          this._setSelectedField("fontFamily", entry.family);
-          this._setSelectedField("fontPath", entry.path);
-          this._refreshFontLibrarySelect();
-          this._refreshPropertyPanel();
-        }
-      } catch (err) {
-        await window.streamplanAPI.showMessage("error", t("layoutEditor.fontUploadFailedTitle"), err.message);
-      } finally {
-        fontUploadBtn.disabled = false;
-        fontUploadBtn.textContent = prevText;
-      }
-    });
-    const fontResetBtn = document.createElement("button");
-    fontResetBtn.textContent = t("layoutEditor.useTemplateFontBtn");
-    fontResetBtn.addEventListener("click", () => {
-      this._setSelectedField("fontFamily", null);
-      this._setSelectedField("fontPath", null);
-      this._refreshPropertyPanel();
-    });
-    fontBtnRow.append(fontUploadBtn, fontResetBtn);
-    this.fontWrap.appendChild(fontBtnRow);
-    this.propFields.appendChild(this.fontWrap);
-  }
-
   _refreshFontLibrarySelect() {
     if (!this.fontLibrarySelect) return;
     const current = this.fontLibrarySelect.value;
@@ -816,169 +1435,9 @@ export class LayoutEditor {
     this.fontLibrarySelect.value = current && listCustomFonts().some((f) => f.path === current) ? current : "";
   }
 
-  // All element types can be animated.
-  _buildAnimationSection() {
-    const header = document.createElement("div");
-    header.className = "section-header";
-    header.textContent = t("layoutEditor.animationHeader");
-    this.propFields.appendChild(header);
-    const animLabels = animStyleLabels();
-    const { wrap: animWrap, select: animSelect } = this._appendSelectRow(
-      this.propFields,
-      t("layoutEditor.animStyleLabel"),
-      ELEMENT_ANIM_STYLES.map((v) => [v === "none" ? "" : v, animLabels[v]]),
-      (value) => this._setSelectedField("animStyle", value || null)
-    );
-    this.animWrap = animWrap;
-    this.animSelect = animSelect;
-    const intensityLabels = animIntensityLabels();
-    const { wrap: intensityWrap, select: intensitySelect } = this._appendSelectRow(
-      this.propFields,
-      t("layoutEditor.intensityLabel"),
-      ELEMENT_ANIM_INTENSITIES.map((v) => [v, intensityLabels[v]]),
-      (value) => this._setSelectedField("animIntensity", value)
-    );
-    this.animIntensityWrap = intensityWrap;
-    this.animIntensitySelect = intensitySelect;
-  }
-
-  // Text-only: content, alignment, color, size.
-  _buildTextSection() {
-    this.textFieldsWrap = document.createElement("div");
-    const header = document.createElement("div");
-    header.className = "section-header";
-    header.textContent = t("layoutEditor.textContentHeader");
-    this.textFieldsWrap.appendChild(header);
-
-    const textAreaWrap = document.createElement("div");
-    textAreaWrap.style.marginBottom = "12px";
-    const textLabel = document.createElement("label");
-    textLabel.className = "field-label";
-    textLabel.textContent = t("layoutEditor.textLabel");
-    textAreaWrap.appendChild(textLabel);
-    this.textArea = document.createElement("textarea");
-    this.textArea.rows = 3;
-    this.textArea.addEventListener("input", () => this._setSelectedField("text", this.textArea.value));
-    textAreaWrap.appendChild(this.textArea);
-    this.textFieldsWrap.appendChild(textAreaWrap);
-
-    const { select: alignSelect } = this._appendSelectRow(
-      this.textFieldsWrap,
-      t("layoutEditor.alignmentLabel"),
-      [
-        ["left", t("layoutEditor.alignLeft")],
-        ["center", t("layoutEditor.alignCenter")],
-        ["right", t("layoutEditor.alignRight")],
-      ],
-      (value) => this._setSelectedField("align", value)
-    );
-    this.textAlignSelect = alignSelect;
-
-    const { input: colorInput } = this._appendColorRow(
-      this.textFieldsWrap,
-      t("layoutEditor.textColorLabel"),
-      (value) => this._setSelectedField("color", value),
-      () => this._setSelectedField("color", null)
-    );
-    this.textColorInput = colorInput;
-
-    const { input: sizeInput } = this._appendNumberRow(this.textFieldsWrap, t("layoutEditor.fontSizeLabel"), 1, 30, 0.5, (v) =>
-      this._setSelectedField("fontSize", v / 100)
-    );
-    this.textSizeInput = sizeInput;
-
-    this.propFields.appendChild(this.textFieldsWrap);
-  }
-
-  // Shape-only: kind, fill, stroke.
-  _buildShapeSection() {
-    this.shapeFieldsWrap = document.createElement("div");
-    const header = document.createElement("div");
-    header.className = "section-header";
-    header.textContent = t("layoutEditor.shapeHeader");
-    this.shapeFieldsWrap.appendChild(header);
-
-    const shapeLabels = shapeKindLabels();
-    const { select: kindSelect } = this._appendSelectRow(
-      this.shapeFieldsWrap,
-      t("layoutEditor.shapeKindLabel"),
-      SHAPE_KINDS.map((kind) => [kind, shapeLabels[kind]]),
-      (value) => this._setSelectedField("shapeKind", value)
-    );
-    this.shapeKindSelect = kindSelect;
-
-    const { input: fillInput } = this._appendColorRow(
-      this.shapeFieldsWrap,
-      t("layoutEditor.fillColorLabel"),
-      (value) => this._setSelectedField("fillColor", value),
-      () => this._setSelectedField("fillColor", null)
-    );
-    this.shapeFillInput = fillInput;
-
-    const { input: strokeInput } = this._appendColorRow(
-      this.shapeFieldsWrap,
-      t("layoutEditor.strokeColorLabel"),
-      (value) => this._setSelectedField("strokeColor", value),
-      () => this._setSelectedField("strokeColor", null)
-    );
-    this.shapeStrokeInput = strokeInput;
-
-    const { input: strokeWidthInput } = this._appendNumberRow(this.shapeFieldsWrap, t("layoutEditor.strokeWidthLabel"), 0, 60, 1, (v) =>
-      this._setSelectedField("strokeWidth", v)
-    );
-    this.shapeStrokeWidthInput = strokeWidthInput;
-
-    this.propFields.appendChild(this.shapeFieldsWrap);
-  }
-
-  // Image-only: upload/replace the source file.
-  _buildImageSection() {
-    this.imageFieldsWrap = document.createElement("div");
-    const header = document.createElement("div");
-    header.className = "section-header";
-    header.textContent = t("layoutEditor.imageHeader");
-    this.imageFieldsWrap.appendChild(header);
-
-    this.imageFilenameEl = document.createElement("div");
-    this.imageFilenameEl.className = "field-hint";
-    this.imageFieldsWrap.appendChild(this.imageFilenameEl);
-
-    const imageBtnRow = document.createElement("div");
-    imageBtnRow.className = "asset-actions";
-    imageBtnRow.style.marginTop = "6px";
-    const imageUploadBtn = document.createElement("button");
-    imageUploadBtn.textContent = t("layoutEditor.replaceImageBtn");
-    imageUploadBtn.addEventListener("click", async () => {
-      let path;
-      try {
-        path = await window.streamplanAPI.chooseAssetPath("sticker");
-      } catch (err) {
-        await window.streamplanAPI.showMessage("error", t("common.importFailedTitle"), t("common.fileDialogError", { message: err.message }));
-        return;
-      }
-      if (path) {
-        this._setSelectedField("imagePath", path);
-        this._refreshPropertyPanel();
-      }
-    });
-    imageBtnRow.appendChild(imageUploadBtn);
-    this.imageFieldsWrap.appendChild(imageBtnRow);
-
-    this.propFields.appendChild(this.imageFieldsWrap);
-  }
-
-  // Only freeform (text/shape/image) elements can be deleted — the 9
-  // fixed day-card/header/logo slots are a permanent part of every layout.
-  _buildDeleteSection() {
-    this.deleteWrap = document.createElement("div");
-    this.deleteWrap.style.marginTop = "18px";
-    this.deleteElementBtn = document.createElement("button");
-    this.deleteElementBtn.className = "danger";
-    this.deleteElementBtn.textContent = t("layoutEditor.deleteElementBtn");
-    this.deleteElementBtn.addEventListener("click", () => this._deleteSelectedElement());
-    this.deleteWrap.appendChild(this.deleteElementBtn);
-    this.propFields.appendChild(this.deleteWrap);
-  }
+  // ------------------------------------------------------------------
+  // Element mutation helpers
+  // ------------------------------------------------------------------
 
   _setSelectedField(field, rawValue) {
     const el = this._draftElements.find((e) => e.id === this._selectedId);
@@ -987,8 +1446,35 @@ export class LayoutEditor {
     if (field === "cx" || field === "cy") value = clamp(value, -0.5, 1.5);
     if (field === "w" || field === "h") value = clamp(value, 0.02, 2.5);
     el[field] = value;
+    this._markDirty();
     this._positionHandleEl(this._handleEls.get(el.id), el);
     this._renderCanvas();
+  }
+
+  _alignSelected(mode) {
+    const el = this._draftElements.find((e) => e.id === this._selectedId);
+    if (!el) return;
+    if (mode === "left") el.cx = el.w / 2;
+    if (mode === "right") el.cx = 1 - el.w / 2;
+    if (mode === "centerH") el.cx = 0.5;
+    if (mode === "top") el.cy = el.h / 2;
+    if (mode === "bottom") el.cy = 1 - el.h / 2;
+    this._markDirty();
+    this._positionHandleEl(this._handleEls.get(el.id), el);
+    this._renderCanvas();
+    this._syncTransformValues(el);
+  }
+
+  _duplicateSelected() {
+    const el = this._draftElements.find((e) => e.id === this._selectedId);
+    if (!el || !FREEFORM_ELEMENT_TYPES.includes(el.type)) return;
+    const copy = createFreeformElement(el.type, { ...el, id: undefined, cx: clamp(el.cx + 0.03, -0.5, 1.5), cy: clamp(el.cy + 0.03, -0.5, 1.5) });
+    this._draftElements.push(copy);
+    this._markDirty();
+    this._renderCanvas();
+    this._renderOverlay();
+    this._refreshLayersList();
+    this._selectElement(copy.id);
   }
 
   // Reorders the element within _draftElements (array order = draw/z-order,
@@ -1001,8 +1487,10 @@ export class LayoutEditor {
     if (idx === -1 || idx === this._draftElements.length - 1) return;
     const [el] = this._draftElements.splice(idx, 1);
     this._draftElements.push(el);
+    this._markDirty();
     this._renderCanvas();
     this._renderOverlay();
+    this._refreshLayersList();
   }
 
   _sendToBack(id) {
@@ -1010,8 +1498,10 @@ export class LayoutEditor {
     if (idx <= 0) return;
     const [el] = this._draftElements.splice(idx, 1);
     this._draftElements.unshift(el);
+    this._markDirty();
     this._renderCanvas();
     this._renderOverlay();
+    this._refreshLayersList();
   }
 
   // Freeform elements (text/shape/image) are additions on top of the fixed
@@ -1019,8 +1509,10 @@ export class LayoutEditor {
   _addFreeformElement(type, overrides = {}) {
     const el = createFreeformElement(type, overrides);
     this._draftElements.push(el);
+    this._markDirty();
     this._renderCanvas();
     this._renderOverlay();
+    this._refreshLayersList();
     this._selectElement(el.id);
   }
 
@@ -1030,32 +1522,17 @@ export class LayoutEditor {
     const idx = this._draftElements.findIndex((e) => e.id === id);
     if (idx === -1) return;
     this._draftElements.splice(idx, 1);
+    this._markDirty();
     this._selectElement(null);
     this._renderCanvas();
     this._renderOverlay();
-  }
-
-  _refreshLoadSelect() {
-    const current = this._loadedLibraryId;
-    this.loadSelect.innerHTML = "";
-    const blank = document.createElement("option");
-    blank.value = "";
-    blank.textContent = t("layoutEditor.unsavedDraft");
-    this.loadSelect.appendChild(blank);
-    listCustomLayouts().forEach((entry) => {
-      const opt = document.createElement("option");
-      opt.value = entry.id;
-      opt.textContent = entry.name;
-      this.loadSelect.appendChild(opt);
-    });
-    const stillExists = current && getCustomLayout(current);
-    this.loadSelect.value = stillExists ? current : "";
-    this.deleteLibraryBtn.disabled = !stillExists;
+    this._refreshLayersList();
   }
 
   _renderCanvas() {
     const baseStyle = this.getBaseStyle ? this.getBaseStyle() : null;
-    const draftStyle = { ...baseStyle, customLayout: { elements: this._draftElements } };
+    const elements = this._hiddenIds?.size ? this._draftElements.filter((el) => !this._hiddenIds.has(el.id)) : this._draftElements;
+    const draftStyle = { ...baseStyle, customLayout: { elements } };
     renderStreamplan(this.canvasEl, SAMPLE_PROFILE, draftStyle, null, [CANVAS_WIDTH, CANVAS_HEIGHT]);
   }
 
@@ -1072,30 +1549,36 @@ export class LayoutEditor {
     this.overlayLayer.innerHTML = "";
     this._handleEls = new Map();
 
+    const expandedCardId = this._draftElements.find((e) => e.id === this._selectedId && e.type === "dayCard")?.id || null;
+
     // Iterate in the elements array's own order — this is the user-
     // controlled z-order (see _bringToFront/_sendToBack), and DOM paint
     // order among unpositioned-vs-absolute siblings follows source order,
     // so this keeps "what you can click on top" matching "what you see on
     // top" in exact sync with the canvas.
     this._draftElements.forEach((el) => {
+      const isDayTime = el.type === "dayTime";
       const div = document.createElement("div");
-      div.className = "layout-el-handle" + (el.id === this._selectedId ? " selected" : "");
+      div.className =
+        "le-handle" +
+        (isDayTime ? " daytime" + (el.dayKey === expandedCardId ? " visible" : "") : "") +
+        (el.id === this._selectedId ? " selected" : "");
       this._positionHandleEl(div, el);
 
       const label = document.createElement("div");
-      label.className = "layout-el-label";
+      label.className = "le-handle-label";
       label.textContent = elementLabel(el);
       div.appendChild(label);
 
       Object.keys(CORNER_SIGNS).forEach((corner) => {
         const handle = document.createElement("div");
-        handle.className = `layout-el-resize ${corner}`;
+        handle.className = `le-handle-resize ${corner}`;
         handle.addEventListener("pointerdown", (e) => this._startResize(e, el, corner));
         div.appendChild(handle);
       });
 
       const rotateHandle = document.createElement("div");
-      rotateHandle.className = "layout-el-rotate";
+      rotateHandle.className = "le-handle-rotate";
       rotateHandle.addEventListener("pointerdown", (e) => this._startRotate(e, el));
       div.appendChild(rotateHandle);
 
@@ -1104,6 +1587,13 @@ export class LayoutEditor {
         this._selectElement(el.id);
         this._startMove(e, el);
       });
+      if (el.type === "text") {
+        div.addEventListener("dblclick", () => {
+          this._selectElement(el.id);
+          this._openPopover("content", null);
+          this.textArea?.focus();
+        });
+      }
 
       this.overlayLayer.appendChild(div);
       this._handleEls.set(el.id, div);
@@ -1111,26 +1601,37 @@ export class LayoutEditor {
   }
 
   _selectElement(id) {
-    if (this._selectedId === id) return;
+    if (this._selectedId === id) {
+      return;
+    }
+    const prevWasDayCard = this._draftElements.find((e) => e.id === this._selectedId)?.type === "dayCard";
     const prev = this._handleEls.get(this._selectedId);
     if (prev) prev.classList.remove("selected");
     this._selectedId = id;
     const next = this._handleEls.get(id);
     if (next) next.classList.add("selected");
-    this._refreshPropertyPanel();
+    const nextIsDayCard = this._draftElements.find((e) => e.id === id)?.type === "dayCard";
+    if (prevWasDayCard || nextIsDayCard) {
+      this._renderOverlay(); // dayTime handle visibility depends on selection
+      const reselected = this._handleEls.get(id);
+      if (reselected) reselected.classList.add("selected");
+    }
+    this._closePopover();
+    this._refreshTransformBar();
+    this._refreshLayersList();
   }
 
-  _refreshPropertyPanel() {
+  _refreshTransformBar() {
     const el = this._draftElements.find((e) => e.id === this._selectedId);
     if (!el) {
-      this.propEmpty.style.display = "";
-      this.propFields.style.display = "none";
-      this.propTitle.textContent = "";
+      this.tbEmptyEl.style.display = "";
+      this.tbFieldsEl.style.display = "none";
+      this.hudEl.classList.remove("visible");
       return;
     }
-    this.propEmpty.style.display = "none";
-    this.propFields.style.display = "";
-    this.propTitle.textContent = el.type === "dayCard" ? el.id : elementLabel(el);
+    this.tbEmptyEl.style.display = "none";
+    this.tbFieldsEl.style.display = "flex";
+    this.tbNameEl.textContent = el.type === "dayCard" ? el.id : elementLabel(el);
 
     const isDayCard = el.type === "dayCard";
     const isHeader = el.type === "header";
@@ -1140,23 +1641,65 @@ export class LayoutEditor {
     const isImage = el.type === "image";
     const isFreeform = FREEFORM_ELEMENT_TYPES.includes(el.type);
 
-    // Corner shape / accent color are meaningless on the logo (always
-    // circular, no accent-colored parts) and on text/image; the stripe
-    // only exists on cards; shape honors corner shape only for rects.
     this.cornerWrap.style.display = isDayCard || isHeader || (isShape && el.shapeKind === "rect") ? "" : "none";
     this.accentWrap.style.display = isDayCard || isHeader ? "" : "none";
     this.stripeWrap.style.display = isDayCard ? "" : "none";
-    this.cardStyleWrap.style.display = isDayCard ? "" : "none";
-    this.fontWrap.style.display = isDayCard || isHeader || isText || isDayTime ? "" : "none";
     this.textFieldsWrap.style.display = isText ? "" : "none";
     this.shapeFieldsWrap.style.display = isShape ? "" : "none";
     this.imageFieldsWrap.style.display = isImage ? "" : "none";
-    this.deleteWrap.style.display = isFreeform ? "" : "none";
+    this.deleteElementBtn.disabled = !isFreeform;
+    this.deleteElementBtn.style.display = isFreeform ? "" : "none";
 
-    this._syncPropertyPanelValues(el);
+    // Rebuild the chip row for this element's applicable popovers.
+    this.tbChipsWrap.innerHTML = "";
+    const chipDefs = [];
+    if (isDayCard || isHeader || (isShape && el.shapeKind === "rect")) chipDefs.push(["layoutEditor.cornerStyleLabel", "corner"]);
+    if (isDayCard) chipDefs.push(["layoutEditor.cardSkinHeader", "design"]);
+    if (isDayCard || isHeader || isText || isDayTime) chipDefs.push(["layoutEditor.fontHeader", "font"]);
+    chipDefs.push(["layoutEditor.animationHeader", "animation"]);
+    if (isText || isShape || isImage) chipDefs.push(["layoutEditor.textContentHeader", "content"]);
+    chipDefs.forEach(([labelKey, key]) => {
+      const chip = this._buildChip(labelKey, this._chipValueText(key, el), key);
+      this.tbChipsWrap.appendChild(chip);
+    });
+    if (this._openPopoverKey && !chipDefs.some(([, key]) => key === this._openPopoverKey)) this._closePopover();
+
+    this._syncTransformValues(el);
   }
 
-  _syncPropertyPanelValues(el) {
+  // Short current-value label shown on each dropdown-chip in the transform
+  // bar (e.g. "Ecken" shows "Abgerundet") so the chip is informative even
+  // before it's opened.
+  _chipValueText(key, el) {
+    if (key === "corner") {
+      const labels = {
+        "": t("layoutEditor.cornerInheritOpt"),
+        sharp: t("layoutEditor.cornerSharpOpt"),
+        rounded: t("layoutEditor.cornerRoundedOpt"),
+        pill: t("layoutEditor.cornerPillOpt"),
+      };
+      return labels[el.cornerStyle || ""];
+    }
+    if (key === "design") {
+      const labels = cardStyleLabels();
+      return labels[el.cardStyle || "classic"];
+    }
+    if (key === "font") {
+      return el.fontFamily || t("layoutEditor.cornerInheritOpt");
+    }
+    if (key === "animation") {
+      const labels = animStyleLabels();
+      return labels[el.animStyle || "none"];
+    }
+    if (key === "content") {
+      if (el.type === "text") return t("layoutEditor.textLabel");
+      if (el.type === "shape") return t("layoutEditor.shapeHeader");
+      if (el.type === "image") return t("layoutEditor.imageHeader");
+    }
+    return "";
+  }
+
+  _syncTransformValues(el) {
     const active = document.activeElement;
     if (active !== this.inputX) this.inputX.value = (el.cx * 100).toFixed(1);
     if (active !== this.inputY) this.inputY.value = (el.cy * 100).toFixed(1);
@@ -1169,7 +1712,10 @@ export class LayoutEditor {
       const baseStyle = this.getBaseStyle ? this.getBaseStyle() : null;
       this.accentColorInput.value = el.accentColor || baseStyle?.colors?.accent || "#7b5fd9";
     }
-    if (active !== this.inputOpacity) this.inputOpacity.value = String(Math.round((el.opacity ?? 1) * 100));
+    if (active !== this.inputOpacity) {
+      this.inputOpacity.value = String(Math.round((el.opacity ?? 1) * 100));
+      this.opacityValueEl.textContent = `${this.inputOpacity.value}%`;
+    }
 
     if (active !== this.cardStyleSelect) this.cardStyleSelect.value = el.cardStyle || "";
     if (active !== this.animSelect) this.animSelect.value = el.animStyle || "";
@@ -1192,11 +1738,30 @@ export class LayoutEditor {
     if (active !== this.shapeStrokeWidthInput) this.shapeStrokeWidthInput.value = String(el.strokeWidth || 0);
 
     this.imageFilenameEl.textContent = el.imagePath ? el.imagePath.split(/[\\/]/).pop() : t("layoutEditor.noImageChosen");
+
+    this._updateHud(el);
+  }
+
+  _updateHud(el) {
+    this.hudEl.classList.add("visible");
+    this.hudX.value.textContent = (el.cx * 100).toFixed(1);
+    this.hudY.value.textContent = (el.cy * 100).toFixed(1);
+    this.hudW.value.textContent = (el.w * 100).toFixed(1);
+    this.hudH.value.textContent = (el.h * 100).toFixed(1);
+    const div = this._handleEls.get(el.id);
+    if (!div) return;
+    const wrapRect = this.canvasWrap.getBoundingClientRect();
+    const left = (el.cx + el.w / 2) * wrapRect.width + 14;
+    const top = (el.cy - el.h / 2) * wrapRect.height - 2;
+    const overflowsRight = left + 150 > wrapRect.width;
+    this.hudEl.style.left = overflowsRight ? `${(el.cx - el.w / 2) * wrapRect.width - 160}px` : `${left}px`;
+    this.hudEl.style.top = `${Math.max(4, top)}px`;
   }
 
   _startMove(e, el) {
     e.preventDefault();
     e.stopPropagation();
+    this.hudEl.classList.add("dragging");
     const rect = this.canvasWrap.getBoundingClientRect();
     const startFracX = (e.clientX - rect.left) / rect.width;
     const startFracY = (e.clientY - rect.top) / rect.height;
@@ -1206,28 +1771,51 @@ export class LayoutEditor {
     const move = (ev) => {
       const fx = (ev.clientX - rect.left) / rect.width;
       const fy = (ev.clientY - rect.top) / rect.height;
-      let cx = startCx + (fx - startFracX);
-      let cy = startCy + (fy - startFracY);
-      cx = snapAxis(clamp(cx, -0.5, 1.5), el.w / 2);
-      cy = snapAxis(clamp(cy, -0.5, 1.5), el.h / 2);
+      let cx = clamp(startCx + (fx - startFracX), -0.5, 1.5);
+      let cy = clamp(startCy + (fy - startFracY), -0.5, 1.5);
+      let snapX = { snapped: false };
+      let snapY = { snapped: false };
+      if (this._snapEnabled) {
+        snapX = snapAxis(cx, el.w / 2);
+        snapY = snapAxis(cy, el.h / 2);
+        cx = snapX.value;
+        cy = snapY.value;
+      }
+      this._showSnapGuides(snapX, snapY);
       el.cx = cx;
       el.cy = cy;
+      this._markDirty();
       this._positionHandleEl(this._handleEls.get(el.id), el);
       this._renderCanvas();
-      this._syncPropertyPanelValues(el);
+      this._syncTransformValues(el);
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      this._hideSnapGuides();
+      this.hudEl.classList.remove("dragging");
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+  }
+
+  _showSnapGuides(snapX, snapY) {
+    this.snapGuideV.style.display = snapX.snapped ? "" : "none";
+    if (snapX.snapped) this.snapGuideV.style.left = `${snapX.axisValue * 100}%`;
+    this.snapGuideH.style.display = snapY.snapped ? "" : "none";
+    if (snapY.snapped) this.snapGuideH.style.top = `${snapY.axisValue * 100}%`;
+  }
+
+  _hideSnapGuides() {
+    this.snapGuideV.style.display = "none";
+    this.snapGuideH.style.display = "none";
   }
 
   _startResize(e, el, corner) {
     e.preventDefault();
     e.stopPropagation();
     this._selectElement(el.id);
+    this.hudEl.classList.add("dragging");
     const rect = this.canvasWrap.getBoundingClientRect();
     const origCx = el.cx;
     const origCy = el.cy;
@@ -1248,13 +1836,15 @@ export class LayoutEditor {
       el.cy = clamp(newCenter.y, -0.5, 1.5);
       el.w = newW;
       el.h = newH;
+      this._markDirty();
       this._positionHandleEl(this._handleEls.get(el.id), el);
       this._renderCanvas();
-      this._syncPropertyPanelValues(el);
+      this._syncTransformValues(el);
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      this.hudEl.classList.remove("dragging");
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -1264,6 +1854,7 @@ export class LayoutEditor {
     e.preventDefault();
     e.stopPropagation();
     this._selectElement(el.id);
+    this.hudEl.classList.add("dragging");
     const rect = this.canvasWrap.getBoundingClientRect();
 
     const move = (ev) => {
@@ -1281,19 +1872,21 @@ export class LayoutEditor {
       if (angle > 180) angle -= 360;
       if (angle < -180) angle += 360;
       el.rotation = angle;
+      this._markDirty();
       this._positionHandleEl(this._handleEls.get(el.id), el);
       this._renderCanvas();
-      this._syncPropertyPanelValues(el);
+      this._syncTransformValues(el);
     };
     const up = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      this.hudEl.classList.remove("dragging");
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   }
 
-  // Shared by the in-editor "Import…" button and the topBar "Import Layout"
+  // Shared by the in-editor Import action and the topBar "Import Layout"
   // button: runs the file picker, reads + parses the .splayout file, and adds
   // it to the permanent library. Returns the new library entry, or null if
   // the user canceled or the file was invalid (an error dialog is already
@@ -1340,8 +1933,9 @@ export class LayoutEditor {
   openLibraryEntry(entry, onClose) {
     this.open({ elements: entry.elements, onClose });
     this._loadedLibraryId = entry.id;
-    this.nameInput.value = entry.name;
-    this._refreshLoadSelect();
+    this._draftName = entry.name;
+    this._dirty = false;
+    this._refreshDraftChip();
   }
 
   // { elements, onApply, onClose } — elements: existing draft to load
@@ -1357,13 +1951,16 @@ export class LayoutEditor {
     this._onApply = onApply || null;
     this._onClose = onClose || null;
     this._loadedLibraryId = null;
-    this.nameInput.value = "";
+    this._draftName = "";
+    this._dirty = false;
+    this._hiddenIds = new Set();
     this.applyBtn.style.display = this._onApply ? "" : "none";
-    this._refreshLoadSelect();
+    this._refreshDraftChip();
     this._selectElement(null);
     this.overlayEl.classList.add("open");
     this._renderCanvas();
     this._renderOverlay();
+    this._refreshLayersList();
     this._startAnimTicker();
   }
 
@@ -1374,6 +1971,7 @@ export class LayoutEditor {
   close() {
     this.overlayEl.classList.remove("open");
     this._onApply = null; // draft is discarded; the live style was never touched
+    this._closePopover();
     this._stopAnimTicker();
     const onClose = this._onClose;
     this._onClose = null;

@@ -1,0 +1,798 @@
+/* Layout-Editor — "Anordnen / Arrange" mode.
+   Cool, technical, blueprint-grid workspace. See design handoff (screen 2a)
+   for the full spec this file implements. Tokens below match --le-* names
+   from that handoff 1:1 for traceability. */
+
+#layoutEditorOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 3, 8, 0.9);
+  display: none;
+  z-index: 60;
+}
+#layoutEditorOverlay.open {
+  display: flex;
+}
+
+.le-shell {
+  --le-bg: #0a0d14;
+  --le-chrome: #0c1119;
+  --le-surface: #101620;
+  --le-border: #1b2634;
+  --le-border-strong: #27384a;
+  --le-text: #e6f1fa;
+  --le-text-2: #b6ccdd;
+  --le-text-dim: #7e93a8;
+  --le-text-faint: #5c7488;
+  --le-text-ghost: #3f5567;
+  --le-accent: #4fd1ff;
+  --le-accent-soft: rgba(79, 209, 255, 0.14);
+  --le-accent-line: rgba(79, 209, 255, 0.055);
+  --le-warn: #ffb347;
+  --le-danger: #ff8fa8;
+  --le-danger-border: #3a2430;
+  --menu-bg: var(--le-chrome);
+  --menu-border: var(--le-border-strong);
+  --menu-text: var(--le-text-2);
+  --menu-hover-bg: var(--le-accent-soft);
+  --menu-icon: var(--le-accent);
+
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--le-bg);
+  border: 1px solid var(--le-border);
+  font-family: "Barlow", "Segoe UI", sans-serif;
+}
+.le-shell button {
+  font-family: inherit;
+}
+.le-shell button:hover:not(:disabled) {
+  transform: none;
+  box-shadow: none;
+}
+.le-shell input,
+.le-shell select {
+  font-family: inherit;
+}
+.le-mono {
+  font-family: "JetBrains Mono", "Consolas", monospace;
+}
+
+/* -- Topbar --------------------------------------------------------------- */
+
+.le-topbar {
+  height: 60px;
+  flex: 0 0 60px;
+  background: var(--le-chrome);
+  border-bottom: 1px solid var(--le-border);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 0 18px;
+}
+.le-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.le-brand-glyph {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border: 2px solid var(--le-accent);
+  border-radius: 5px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 3px;
+}
+.le-brand-glyph span {
+  background: var(--le-accent);
+  border-radius: 1px;
+}
+.le-brand-glyph span:nth-child(1),
+.le-brand-glyph span:nth-child(4) {
+  opacity: 0.9;
+}
+.le-brand-glyph span:nth-child(2),
+.le-brand-glyph span:nth-child(3) {
+  opacity: 0.35;
+}
+.le-brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.le-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  color: var(--le-text);
+  font-family: "Chakra Petch", "Bahnschrift", sans-serif;
+  text-transform: uppercase;
+}
+.le-subtitle {
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 1.4px;
+  color: var(--le-accent);
+  text-transform: uppercase;
+}
+.le-divider {
+  width: 1px;
+  height: 26px;
+  background: var(--le-border);
+  flex-shrink: 0;
+}
+.le-draft-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--le-bg);
+  border: 1px solid var(--le-border-strong);
+  border-radius: 8px;
+  padding: 5px 8px 5px 12px;
+  cursor: pointer;
+}
+.le-draft-chip-label {
+  font-size: 12.5px;
+  color: var(--le-text-dim);
+}
+.le-draft-chip-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--le-text);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.le-draft-chip-name-input {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--le-accent);
+  outline: none;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--le-text);
+  width: 140px;
+  padding: 0;
+}
+.le-draft-chip-pill {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--le-warn);
+  background: rgba(255, 179, 71, 0.14);
+  border-radius: 3px;
+  padding: 2px 5px;
+}
+.le-draft-chip-caret {
+  font-size: 11px;
+  color: var(--le-text-dim);
+}
+.le-btn-ghost {
+  background: none;
+  border: 1px solid var(--le-border-strong);
+  border-radius: 8px;
+  color: var(--le-text-2);
+  font-weight: 600;
+  font-size: 12.5px;
+  padding: 7px 12px;
+}
+.le-btn-ghost:hover:not(:disabled) {
+  background: var(--le-accent-soft);
+  border-color: var(--le-accent);
+  color: var(--le-text);
+}
+.le-spacer {
+  flex: 1;
+}
+.le-element-count {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--le-text-faint);
+  white-space: nowrap;
+}
+.le-btn-close {
+  background: none;
+  border: 1px solid var(--le-border-strong);
+  border-radius: 8px;
+  color: var(--le-text-dim);
+  font-weight: 600;
+  font-size: 12.5px;
+  padding: 8px 14px;
+}
+.le-btn-close:hover:not(:disabled) {
+  border-color: var(--le-danger-border);
+  color: var(--le-danger);
+}
+.le-btn-primary {
+  background: var(--le-accent);
+  border: none;
+  border-radius: 8px;
+  color: #06131c;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.4px;
+  padding: 10px 18px;
+  box-shadow: 0 6px 18px rgba(79, 209, 255, 0.28);
+}
+.le-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  box-shadow: 0 8px 22px rgba(79, 209, 255, 0.4);
+}
+
+/* -- Body / Layers rail ----------------------------------------------------- */
+
+.le-body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+.le-layers-rail {
+  width: 248px;
+  min-width: 248px;
+  background: var(--le-chrome);
+  border-right: 1px solid var(--le-border);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.le-layers-head {
+  padding: 14px 16px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.le-layers-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  color: var(--le-accent);
+  text-transform: uppercase;
+}
+.le-layers-hint {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--le-text-faint);
+}
+.le-layers-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px;
+}
+.le-layer-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 9px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+.le-layer-row.dragging {
+  opacity: 0.4;
+}
+.le-layer-row:hover {
+  background: rgba(79, 209, 255, 0.07);
+}
+.le-layer-handle {
+  font-size: 11px;
+  color: var(--le-text-faint);
+  cursor: grab;
+  flex-shrink: 0;
+}
+.le-layer-glyph {
+  width: 14px;
+  flex-shrink: 0;
+  font-size: 12px;
+  text-align: center;
+  color: var(--le-text-2);
+}
+.le-layer-glyph.accent {
+  color: var(--le-accent);
+}
+.le-layer-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--le-text-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.le-layer-badge {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 9.5px;
+  color: var(--le-text-ghost);
+  flex-shrink: 0;
+}
+.le-layer-visibility {
+  font-size: 12px;
+  color: var(--le-text-ghost);
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+.le-layer-row.selected {
+  background: var(--le-accent-soft);
+  box-shadow: inset 0 0 0 1px rgba(79, 209, 255, 0.5);
+}
+.le-layer-row.selected .le-layer-name {
+  font-weight: 600;
+  color: var(--le-text);
+}
+.le-layer-row.selected .le-layer-handle,
+.le-layer-row.selected .le-layer-glyph {
+  color: var(--le-accent);
+}
+.le-layer-row.selected .le-layer-badge {
+  color: var(--le-accent);
+}
+.le-layer-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px 6px 30px;
+}
+.le-layer-sub-arrow {
+  width: 14px;
+  font-size: 11px;
+  color: var(--le-accent);
+  opacity: 0.6;
+}
+.le-layer-sub-text {
+  font-size: 12px;
+  color: var(--le-text-dim);
+}
+.le-layers-foot {
+  border-top: 1px solid var(--le-border);
+  padding: 10px;
+  display: flex;
+  gap: 6px;
+}
+.le-layers-foot-btn {
+  flex: 1;
+  background: var(--le-surface);
+  border: 1px solid var(--le-border-strong);
+  border-radius: 7px;
+  color: var(--le-text-2);
+  font-weight: 600;
+  font-size: 12px;
+  padding: 8px 0;
+}
+.le-layers-foot-btn:hover:not(:disabled) {
+  background: var(--le-accent-soft);
+  border-color: var(--le-accent);
+  color: var(--le-text);
+}
+.le-layers-foot .sp-menu {
+  flex: 1;
+}
+.le-layers-foot .sp-menu .le-layers-foot-btn {
+  width: 100%;
+}
+
+/* -- Canvas area -------------------------------------------------------- */
+
+.le-canvas-area {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 26px;
+  background: var(--le-bg);
+}
+.le-grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(var(--le-accent-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--le-accent-line) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+.le-grid.hidden {
+  display: none;
+}
+.le-canvas-wrap {
+  position: relative;
+  height: 100%;
+  aspect-ratio: 1400 / 1750;
+  max-width: 100%;
+  max-height: 100%;
+}
+.le-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 4px;
+}
+.le-overlay-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.le-snap-guide {
+  position: absolute;
+  background: rgba(79, 209, 255, 0.55);
+  pointer-events: none;
+}
+.le-snap-guide.vertical {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  border-left: 1px dashed rgba(79, 209, 255, 0.55);
+  background: none;
+}
+.le-snap-guide.horizontal {
+  left: 0;
+  right: 0;
+  height: 1px;
+  border-top: 1px dashed rgba(79, 209, 255, 0.55);
+  background: none;
+}
+
+/* -- Selection handles ---------------------------------------------------- */
+
+.le-handle {
+  position: absolute;
+  box-sizing: border-box;
+  pointer-events: auto;
+  cursor: move;
+  border: 1px dashed rgba(126, 147, 168, 0.45);
+  border-radius: 3px;
+}
+.le-handle.daytime {
+  display: none;
+  border-color: rgba(79, 209, 255, 0.4);
+  border-radius: 2px;
+}
+.le-handle.daytime.visible {
+  display: block;
+}
+.le-handle.selected {
+  border: 1.5px solid var(--le-accent);
+  box-shadow: 0 0 0 1px rgba(79, 209, 255, 0.25), 0 0 24px rgba(79, 209, 255, 0.35);
+}
+.le-handle-label {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 1px;
+  color: var(--le-accent);
+  pointer-events: none;
+  display: none;
+  white-space: nowrap;
+}
+.le-handle.selected .le-handle-label {
+  display: block;
+}
+.le-handle-resize {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px;
+  background: var(--le-accent);
+  display: none;
+}
+.le-handle.selected .le-handle-resize,
+.le-handle.selected .le-handle-rotate {
+  display: block;
+}
+.le-handle-resize.nw {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+.le-handle-resize.ne {
+  top: 0;
+  left: 100%;
+  cursor: nesw-resize;
+}
+.le-handle-resize.sw {
+  top: 100%;
+  left: 0;
+  cursor: nesw-resize;
+}
+.le-handle-resize.se {
+  top: 100%;
+  left: 100%;
+  cursor: nwse-resize;
+}
+.le-handle-rotate {
+  position: absolute;
+  top: -32px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  border: 2px solid var(--le-accent);
+  border-radius: 50%;
+  background: var(--le-bg);
+  cursor: grab;
+  display: none;
+}
+.le-handle-rotate::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 1px;
+  height: 20px;
+  background: var(--le-accent);
+  transform: translateX(-0.5px);
+}
+
+/* -- Floating HUD --------------------------------------------------------- */
+
+.le-hud {
+  position: absolute;
+  display: none;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(10, 13, 20, 0.92);
+  border: 1px solid var(--le-border-strong);
+  border-radius: 9px;
+  padding: 9px 11px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+  z-index: 5;
+  transition: top 0.12s ease, left 0.12s ease;
+}
+.le-hud.visible {
+  display: flex;
+}
+.le-hud.dragging {
+  transition: none;
+}
+.le-hud-row {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--le-text);
+  white-space: nowrap;
+}
+.le-hud-row .le-hud-axis {
+  color: var(--le-text-faint);
+  margin-right: 3px;
+}
+.le-hud-row .le-hud-axis:not(:first-child) {
+  margin-left: 8px;
+}
+.le-hud-divider {
+  height: 1px;
+  background: var(--le-border);
+}
+.le-hud-actions {
+  display: flex;
+  gap: 6px;
+}
+.le-hud-btn {
+  background: var(--le-surface);
+  border: 1px solid var(--le-border-strong);
+  border-radius: 5px;
+  font-size: 11px;
+  padding: 4px 7px;
+  color: var(--le-text-2);
+}
+.le-hud-btn:hover:not(:disabled) {
+  border-color: var(--le-accent);
+  color: var(--le-accent);
+}
+
+/* -- Status pill ------------------------------------------------------ */
+
+.le-status-pill {
+  position: absolute;
+  left: 26px;
+  bottom: 22px;
+  display: flex;
+  align-items: center;
+  background: rgba(12, 17, 25, 0.9);
+  border: 1px solid var(--le-border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  z-index: 4;
+}
+.le-status-item {
+  color: var(--le-text-dim);
+  background: none;
+  border: none;
+  padding: 0 8px;
+  font-family: inherit;
+  font-size: inherit;
+  cursor: default;
+}
+.le-status-item.clickable {
+  cursor: pointer;
+  color: var(--le-text-dim);
+}
+.le-status-item.clickable.on {
+  color: var(--le-accent);
+}
+.le-status-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--le-border);
+}
+
+/* -- Transform bar -------------------------------------------------------- */
+
+.le-transformbar {
+  height: 66px;
+  flex: 0 0 66px;
+  background: var(--le-chrome);
+  border-top: 1px solid var(--le-border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 18px;
+  overflow-x: auto;
+}
+.le-tb-empty {
+  font-size: 12.5px;
+  color: var(--le-text-faint);
+}
+.le-tb-name {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  color: var(--le-accent);
+  width: 78px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+.le-tb-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--le-bg);
+  border: 1px solid var(--le-border-strong);
+  border-radius: 8px;
+  padding: 4px 6px;
+  flex-shrink: 0;
+}
+.le-tb-axis {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 10px;
+  color: var(--le-text-faint);
+}
+.le-tb-input {
+  background: none;
+  border: none;
+  outline: none;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12.5px;
+  color: var(--le-text);
+  width: 52px;
+}
+.le-tb-input.rotation {
+  width: 40px;
+}
+.le-tb-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--le-border);
+  margin: 2px 0;
+}
+.le-tb-align {
+  padding: 4px;
+  gap: 2px;
+}
+.le-tb-align-btn {
+  background: none;
+  border: none;
+  border-radius: 5px;
+  font-size: 13px;
+  padding: 5px 9px;
+  color: var(--le-text-2);
+}
+.le-tb-align-btn:hover:not(:disabled) {
+  color: var(--le-text);
+}
+.le-tb-opacity {
+  padding: 7px 12px;
+  gap: 8px;
+}
+.le-tb-opacity label {
+  font-size: 12px;
+  color: var(--le-text-dim);
+}
+.le-tb-opacity input[type="range"] {
+  width: 96px;
+  accent-color: var(--le-accent);
+}
+.le-tb-opacity .le-tb-value {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11.5px;
+  color: var(--le-text);
+}
+.le-tb-chip {
+  padding: 6px 10px;
+  gap: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.le-tb-chip-label {
+  font-size: 12px;
+  color: var(--le-text-dim);
+}
+.le-tb-chip-value {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--le-text);
+}
+.le-tb-chip-caret {
+  font-size: 10px;
+  color: var(--le-text-faint);
+}
+.le-tb-delete {
+  background: none;
+  border: 1px solid var(--le-danger-border);
+  border-radius: 8px;
+  color: var(--le-danger);
+  font-weight: 600;
+  font-size: 12.5px;
+  padding: 8px 12px;
+  flex-shrink: 0;
+}
+.le-tb-delete:hover:not(:disabled) {
+  background: rgba(255, 143, 168, 0.12);
+}
+
+/* -- Popovers (Ecken / Design / Animation / type-specific fields) --------- */
+
+.le-popover {
+  display: none;
+  /* position: fixed (not absolute) — its left/bottom are computed in JS
+     from the clicked chip's own bounding rect (_openPopover). Deliberately
+     NOT nested inside .le-transformbar's scrolling row: overflow-x: auto
+     there implicitly clips overflow-y too, which would hide an
+     absolutely-positioned popover nested inside it. */
+  position: fixed;
+  min-width: 260px;
+  max-width: 340px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--le-chrome);
+  border: 1px solid var(--le-border-strong);
+  border-radius: 10px;
+  padding: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+  z-index: 70;
+}
+.le-popover.open {
+  display: block;
+}
+.le-popover .section-header {
+  color: var(--le-accent);
+  font-size: 11px;
+}
+
+/* -- Disabled / focus states ---------------------------------------------- */
+
+.le-shell button:disabled,
+.le-shell input:disabled,
+.le-shell select:disabled {
+  color: var(--le-text-faint);
+  border-color: var(--le-border);
+  cursor: not-allowed;
+}
+.le-shell button:focus-visible,
+.le-shell input:focus-visible,
+.le-shell select:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(79, 209, 255, 0.45);
+}
