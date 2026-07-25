@@ -2,6 +2,11 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.18] - 2026-07-25
+
+### Fixed
+- Template Studio's "Exportieren…" button (in the tool panel's footer, at the very bottom of the window) opened its dropdown menu downward, off the bottom of the screen where it couldn't be reached. It now opens upward, matching the Layout Editor's own layers-panel menu.
+
 ## [1.0.17] - 2026-07-25
 
 ### Changed
