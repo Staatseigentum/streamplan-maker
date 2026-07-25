@@ -1624,7 +1624,10 @@ export class TemplateStudio {
   // or import — folded into one menu (per the studio's compact footer).
   _buildExportMenu() {
     const wrap = document.createElement("div");
-    wrap.className = "sp-menu";
+    // menu-up: this control lives in the panel foot at the very bottom of
+    // the tool panel, so the default downward-opening menu would render
+    // partly or fully below the viewport.
+    wrap.className = "sp-menu menu-up";
     wrap.style.flex = "1";
 
     const menuBtn = document.createElement("button");
