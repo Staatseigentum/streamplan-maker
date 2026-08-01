@@ -2,6 +2,12 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.19] - 2026-08-01
+
+### Fixed
+- Turning the body text size up made the start time and the "until …" line below it grow into each other until they overlapped. Their spacing was a fixed number of pixels while the text itself scaled, so anything past a moderate size collided. The spacing now follows the actual text size, and in the list and ticket cards the pair shrinks to stay inside its card instead of spilling out. All twelve layout variants were affected; all twelve are fixed.
+- The background gradient appeared to do nothing. Once Template Studio's gradient editor had been opened even once, the two background colour pickers in the Customize panel stopped affecting the plan entirely — you could set them to bright red and blue and nothing would change. Both directions now stay in sync: the colour pickers move the gradient's first and last stop, and dragging or recolouring a stop in the gradient bar updates the pickers. Extra stops you added in the middle survive either way.
+
 ## [1.0.18] - 2026-07-25
 
 ### Fixed
