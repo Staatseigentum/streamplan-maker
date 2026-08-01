@@ -181,6 +181,37 @@ function sanitizeGradientStops(raw) {
   return stops.length >= 2 ? stops : null;
 }
 
+// Keeps the simple background/backgroundEnd colour pair and the Template
+// Studio's gradient stop list in step.
+//
+// They used to drift apart silently: rendering/layout.js lets a stops list
+// fully replace the pair, and the Studio writes a stops list as soon as its
+// gradient editor is opened — from that moment the Customize panel's two
+// background swatches did nothing at all. You could set them to bright red and
+// blue and the canvas would keep the old colours, which is exactly the
+// "gradient has no effect" a tester ran into.
+//
+// The first and last stop *are* that pair conceptually, so an edit on either
+// side writes through to the other. Any middle stops the Studio created are
+// left untouched.
+export function setBackgroundColor(style, key, value) {
+  style.colors[key] = value;
+  const stops = style.backgroundGradientStops;
+  if (!stops || stops.length < 2) return style;
+  if (key === "background") stops[0].color = value;
+  else if (key === "backgroundEnd") stops[stops.length - 1].color = value;
+  return style;
+}
+
+// The mirror of setBackgroundColor, for edits that start at the gradient bar.
+export function syncGradientPairFromStops(style) {
+  const stops = style.backgroundGradientStops;
+  if (!stops || stops.length < 2) return style;
+  style.colors.background = stops[0].color;
+  style.colors.backgroundEnd = stops[stops.length - 1].color;
+  return style;
+}
+
 export function styleFromDict(data) {
   return createStyleConfig({
     templateId: data.template_id ?? null,

@@ -28,7 +28,17 @@ import {
   ELEMENT_ANIM_INTENSITIES,
   SHAPE_KINDS,
 } from "../models/customLayout.js";
-import { COLOR_KEYS, FONT_SCALE_MIN, FONT_SCALE_MAX, BACKGROUND_TEXTURES, cloneStyle, styleToDict, styleFromDict } from "../models/style.js";
+import {
+  COLOR_KEYS,
+  FONT_SCALE_MIN,
+  FONT_SCALE_MAX,
+  BACKGROUND_TEXTURES,
+  cloneStyle,
+  styleToDict,
+  styleFromDict,
+  setBackgroundColor,
+  syncGradientPairFromStops,
+} from "../models/style.js";
 import { customBaseStyle } from "../models/templates.js";
 import { addCustomTemplate, updateCustomTemplate, removeCustomTemplate, getCustomTemplate, isCustomTemplateId } from "../models/customTemplateLibrary.js";
 import { listCustomLayouts, getCustomLayout } from "../models/customLayoutLibrary.js";
@@ -640,9 +650,13 @@ export class TemplateStudio {
       hex.className = "ts-swatch-hex";
       info.append(name, hex);
       colorInput.addEventListener("input", () => {
-        this._draftStyle.colors[key] = colorInput.value;
+        // Writes through to the first/last gradient stop for the two background
+        // colours — otherwise this swatch stops affecting the render once the
+        // gradient editor below has created a stops list. See setBackgroundColor.
+        setBackgroundColor(this._draftStyle, key, colorInput.value);
         hex.textContent = colorInput.value.toUpperCase();
         this._onStyleChange();
+        this._refreshGradientSection();
       });
       card.append(colorInput, info);
       grid.appendChild(card);
@@ -791,6 +805,9 @@ export class TemplateStudio {
       colorInput.style.cssText = "position:absolute;width:0;height:0;opacity:0;pointer-events:none;";
       colorInput.addEventListener("input", () => {
         stop.color = colorInput.value;
+        // Mirror the outer stops back onto colors.background/backgroundEnd so
+        // the Customize panel's swatches keep showing what's actually drawn.
+        syncGradientPairFromStops(this._draftStyle);
         this._onStyleChange();
         this._refreshGradientSection();
       });
@@ -802,6 +819,7 @@ export class TemplateStudio {
         const idx = stops.indexOf(stop);
         if (idx !== -1) {
           stops.splice(idx, 1);
+          syncGradientPairFromStops(this._draftStyle);
           this._onStyleChange();
           this._refreshGradientSection();
         }
@@ -829,6 +847,9 @@ export class TemplateStudio {
       window.removeEventListener("pointerup", up);
       if (moved) {
         stops.sort((a, b) => a.offset - b.offset);
+        // Dragging can change which stop is first/last, so re-mirror the pair.
+        syncGradientPairFromStops(this._draftStyle);
+        this._onStyleChange();
         this._refreshGradientSection();
       } else {
         colorInput.click();

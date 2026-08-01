@@ -1,4 +1,11 @@
-import { COLOR_KEYS, FONT_SCALE_MIN, FONT_SCALE_MAX, cloneStyle, styleFromDict } from "../models/style.js";
+import {
+  COLOR_KEYS,
+  FONT_SCALE_MIN,
+  FONT_SCALE_MAX,
+  cloneStyle,
+  styleFromDict,
+  setBackgroundColor,
+} from "../models/style.js";
 import { TEMPLATE_ORDER, getTemplate, customBaseStyle } from "../models/templates.js";
 import { addCustomTemplate, removeCustomTemplate, getCustomTemplate, isCustomTemplateId } from "../models/customTemplateLibrary.js";
 import { listCustomLayouts, getCustomLayout } from "../models/customLayoutLibrary.js";
@@ -206,7 +213,10 @@ export function buildColorRow(key, getStyle, onStyleChange) {
   swatch.value = getStyle().colors[key] || "#000000";
   swatch.addEventListener("input", () => {
     const style = getStyle();
-    style.colors[key] = swatch.value;
+    // Not a plain `style.colors[key] = …`: the two background colours also have
+    // to reach the gradient stop list, or they stop affecting the render as
+    // soon as the Template Studio has created one. See setBackgroundColor.
+    setBackgroundColor(style, key, swatch.value);
     onStyleChange(style);
   });
   row.append(label, swatch);

@@ -61,6 +61,41 @@ function wrapText(ctx, text, maxWidth, maxLines) {
   return lines;
 }
 
+// Every card variant stacks the start time above the "bis …" line, both drawn
+// with textBaseline "middle". Their font sizes scale with bodyScale but the
+// offsets between them used to be fixed pixel constants, so from roughly
+// bodyScale 1.2 upwards the two lines grew into each other. Deriving the
+// offsets from the type sizes keeps the pair centred and clear of each other
+// at any scale, and the numbers still land where they always did at scale 1
+// (a 44/30 pair yields -18/+25 against the old -14/+26).
+//
+// The leading is proportional rather than a constant, so the breathing room
+// grows with the text instead of being eaten by it.
+function stackedTimeOffsets(startSize, endSize) {
+  const gap = Math.max(4, (startSize + endSize) * 0.08);
+  return {
+    startDy: -(endSize + gap) / 2,
+    endDy: (startSize + gap) / 2,
+    blockH: startSize + endSize + gap,
+  };
+}
+
+// Shrinks a start/end time pair until the stack fits `available` pixels, so a
+// large bodyScale can't push the times out of their card. Returns the sizes to
+// actually draw with plus the offsets for them.
+function fitStackedTimes(startSize, endSize, available) {
+  let s = startSize;
+  let e = endSize;
+  const first = stackedTimeOffsets(s, e);
+  if (available > 0 && first.blockH > available) {
+    const k = available / first.blockH;
+    s *= k;
+    e *= k;
+  }
+  const o = stackedTimeOffsets(s, e);
+  return { startSize: s, endSize: e, startDy: o.startDy, endDy: o.endDy };
+}
+
 function drawPanel(ctx, [x0, y0, x1, y1], cornerStyle, baseRadius, fill, stroke, strokeWidth = 0) {
   // "pill" is only reachable via a per-element Layout Editor override (not
   // the global Card Corners setting), so it's handled locally here rather
@@ -206,18 +241,21 @@ function drawDayCard(ctx, entry, rect, style, highlightRects, stripe = true, rot
   ctx.fillText(dayLabelShort(entry.day), labelX, topMidY);
 
   const timeX = labelX + 190;
+  // The band the time stack may occupy: the card minus whatever the note took.
+  const timeBandH = (entry.label ? rowH - noteBandH : rowH) - 12;
+  const times = fitStackedTimes(44 * style.bodyScale, 30 * style.bodyScale, timeBandH);
   if (!opts.skipTime) {
-    ctx.font = fontString(style.fontBody, 44 * style.bodyScale);
+    ctx.font = fontString(style.fontBody, times.startSize);
     ctx.fillStyle = textPrimary;
-    ctx.fillText(entry.startTime, timeX, topMidY - 14);
+    ctx.fillText(entry.startTime, timeX, topMidY + times.startDy);
   }
 
   if (!opts.skipDuration) {
     const end = endDisplay(entry);
     if (end) {
-      ctx.font = fontString(style.fontBody, 30 * style.bodyScale);
+      ctx.font = fontString(style.fontBody, times.endSize);
       ctx.fillStyle = textSecondary;
-      ctx.fillText(entry.endTime ? t("render.until", { end }) : end, timeX, topMidY + 26);
+      ctx.fillText(entry.endTime ? t("render.until", { end }) : end, timeX, topMidY + times.endDy);
     }
   }
 
@@ -341,8 +379,10 @@ function drawBadgeCardSkin(ctx, entry, rect, style, highlightRects, stripe = tru
   let remaining = y1 - (nodeCy + nodeR + 10);
   if (remaining >= 24) {
     const timeY = nodeCy + nodeR + Math.min(40, remaining * 0.5);
+    const startSize = Math.min(40, remaining * 0.4) * style.headingScale;
+    const endSize = 24 * style.bodyScale;
     if (!opts.skipTime) {
-      ctx.font = fontString(style.fontHeading, Math.min(40, remaining * 0.4) * style.headingScale, "bold");
+      ctx.font = fontString(style.fontHeading, startSize, "bold");
       ctx.fillStyle = textPrimary;
       ctx.fillText(truncateText(ctx, entry.startTime, rectW - 16), cx, timeY);
     }
@@ -351,8 +391,11 @@ function drawBadgeCardSkin(ctx, entry, rect, style, highlightRects, stripe = tru
       const end = endDisplay(entry);
       remaining = y1 - (timeY + 20);
       if (end && remaining >= 20) {
-        const endY = timeY + Math.min(40, remaining);
-        ctx.font = fontString(style.fontBody, 24 * style.bodyScale);
+        // Separation from the type sizes, not a fixed 40px cap — see
+        // stackedTimeOffsets. Still bounded by the space left in the card.
+        const step = stackedTimeOffsets(startSize, endSize);
+        const endY = timeY + Math.min(step.endDy - step.startDy, remaining);
+        ctx.font = fontString(style.fontBody, endSize);
         ctx.fillStyle = textSecondary;
         ctx.fillText(truncateText(ctx, end, rectW - 16), cx, endY);
       }
@@ -403,8 +446,10 @@ function drawCalendarCardSkin(ctx, entry, rect, style, highlightRects, stripe = 
   const remaining = rectH - headerH;
   if (remaining >= 26) {
     let ty = y0 + headerH + Math.min(46, remaining * 0.4);
+    const startSize = Math.min(30, remaining * 0.28) * style.bodyScale;
+    const endSize = 19 * style.bodyScale;
     if (!opts.skipTime) {
-      ctx.font = fontString(style.fontBody, Math.min(30, remaining * 0.28) * style.bodyScale, "bold");
+      ctx.font = fontString(style.fontBody, startSize, "bold");
       ctx.fillStyle = textPrimary;
       ctx.fillText(truncateText(ctx, entry.startTime, rectW - 16), cx, ty);
     }
@@ -412,8 +457,9 @@ function drawCalendarCardSkin(ctx, entry, rect, style, highlightRects, stripe = 
     if (!opts.skipDuration) {
       const end = endDisplay(entry);
       if (end && y1 - ty >= 24) {
-        ty += Math.min(32, (y1 - ty) * 0.6);
-        ctx.font = fontString(style.fontBody, 19 * style.bodyScale);
+        const step = stackedTimeOffsets(startSize, endSize);
+        ty += Math.min(step.endDy - step.startDy, (y1 - ty) * 0.6);
+        ctx.font = fontString(style.fontBody, endSize);
         ctx.fillStyle = textSecondary;
         ctx.fillText(truncateText(ctx, end, rectW - 16), cx, ty);
       }
@@ -470,21 +516,26 @@ function drawTicketCardSkin(ctx, entry, rect, style, highlightRects, stripe = tr
   if (bodyX1 - bodyX0 >= 40) {
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
+    const times = fitStackedTimes(
+      Math.min(30, rectH * 0.3) * style.bodyScale,
+      19 * style.bodyScale,
+      rectH - 10
+    );
     if (!opts.skipTime) {
-      ctx.font = fontString(style.fontBody, Math.min(30, rectH * 0.3) * style.bodyScale);
+      ctx.font = fontString(style.fontBody, times.startSize);
       ctx.fillStyle = textPrimary;
-      ctx.fillText(truncateText(ctx, entry.startTime, bodyX1 - bodyX0 - 12), bodyX0, midY - Math.min(14, rectH * 0.15));
+      ctx.fillText(truncateText(ctx, entry.startTime, bodyX1 - bodyX0 - 12), bodyX0, midY + times.startDy);
     }
 
     if (!opts.skipDuration) {
       const end = endDisplay(entry);
       if (end && rectH >= 60) {
-        ctx.font = fontString(style.fontBody, 19 * style.bodyScale);
+        ctx.font = fontString(style.fontBody, times.endSize);
         ctx.fillStyle = textSecondary;
         ctx.fillText(
           truncateText(ctx, entry.endTime ? t("render.until", { end }) : end, bodyX1 - bodyX0 - 12),
           bodyX0,
-          midY + Math.min(18, rectH * 0.18)
+          midY + times.endDy
         );
       }
     }
@@ -587,8 +638,10 @@ function drawRingCardSkin(ctx, entry, rect, style, highlightRects, stripe = true
   let remaining = y1 - (cy + nodeR + 8);
   if (remaining >= 24) {
     let ty = cy + nodeR + Math.min(30, remaining * 0.5);
+    const startSize = Math.min(24, remaining * 0.4) * style.bodyScale;
+    const endSize = 16 * style.bodyScale;
     if (!opts.skipTime) {
-      ctx.font = fontString(style.fontBody, Math.min(24, remaining * 0.4) * style.bodyScale, "bold");
+      ctx.font = fontString(style.fontBody, startSize, "bold");
       ctx.fillStyle = textPrimary;
       ctx.fillText(truncateText(ctx, entry.startTime, rectW - 16), cx, ty);
     }
@@ -597,8 +650,9 @@ function drawRingCardSkin(ctx, entry, rect, style, highlightRects, stripe = true
       const end = endDisplay(entry);
       remaining = y1 - (ty + 16);
       if (end && remaining >= 18) {
-        ty += Math.min(26, remaining);
-        ctx.font = fontString(style.fontBody, 16 * style.bodyScale);
+        const step = stackedTimeOffsets(startSize, endSize);
+        ty += Math.min(step.endDy - step.startDy, remaining);
+        ctx.font = fontString(style.fontBody, endSize);
         ctx.fillStyle = textSecondary;
         ctx.fillText(truncateText(ctx, end, rectW - 16), cx, ty);
       }
@@ -946,15 +1000,18 @@ function drawGridVariant(ctx, activeDays, style, contentArea, highlightRects) {
     ctx.fillText(dayLabelShort(entry.day), cx, nodeCy);
 
     const timeY = nodeCy + nodeR + 40;
-    ctx.font = fontString(style.fontHeading, 40 * style.headingScale, "bold");
+    const startSize = 40 * style.headingScale;
+    const endSize = 30 * style.bodyScale;
+    ctx.font = fontString(style.fontHeading, startSize, "bold");
     ctx.fillStyle = textPrimary;
     ctx.fillText(entry.startTime, cx, timeY);
 
     const end = endDisplay(entry);
     if (end) {
-      ctx.font = fontString(style.fontBody, 30 * style.bodyScale);
+      const step = stackedTimeOffsets(startSize, endSize);
+      ctx.font = fontString(style.fontBody, endSize);
       ctx.fillStyle = textSecondary;
-      ctx.fillText(end, cx, timeY + 40);
+      ctx.fillText(end, cx, timeY + (step.endDy - step.startDy));
     }
 
     if (entry.label) {
@@ -1047,14 +1104,17 @@ function drawCalendarGridVariant(ctx, activeDays, style, contentArea, highlightR
 
     const cx = (x0 + x1) / 2;
     let ty = y0 + headerH + 46;
-    ctx.font = fontString(style.fontBody, 30 * style.bodyScale, "bold");
+    const startSize = 30 * style.bodyScale;
+    const endSize = 19 * style.bodyScale;
+    ctx.font = fontString(style.fontBody, startSize, "bold");
     ctx.fillStyle = textPrimary;
     ctx.fillText(truncateText(ctx, entry.startTime, x1 - x0 - 16), cx, ty);
 
     const end = endDisplay(entry);
     if (end) {
-      ty += 32;
-      ctx.font = fontString(style.fontBody, 19 * style.bodyScale);
+      const step = stackedTimeOffsets(startSize, endSize);
+      ty += step.endDy - step.startDy;
+      ctx.font = fontString(style.fontBody, endSize);
       ctx.fillStyle = textSecondary;
       ctx.fillText(truncateText(ctx, end, x1 - x0 - 16), cx, ty);
     }
@@ -1237,15 +1297,18 @@ function drawRadialClockVariant(ctx, activeDays, style, contentArea, highlightRe
     ctx.fillStyle = "#0A0A0F";
     ctx.fillText(dayLabelShort(entry.day), nx, ny);
 
-    ctx.font = fontString(style.fontBody, 25 * style.bodyScale, "bold");
+    const startSize = 25 * style.bodyScale;
+    const endSize = 17 * style.bodyScale;
+    ctx.font = fontString(style.fontBody, startSize, "bold");
     ctx.fillStyle = textPrimary;
     ctx.fillText(entry.startTime, nx, ny + nodeR + 32);
 
     let cursorY = ny + nodeR + 32;
     const end = endDisplay(entry);
     if (end) {
-      cursorY += 26;
-      ctx.font = fontString(style.fontBody, 17 * style.bodyScale);
+      const step = stackedTimeOffsets(startSize, endSize);
+      cursorY += step.endDy - step.startDy;
+      ctx.font = fontString(style.fontBody, endSize);
       ctx.fillStyle = textSecondary;
       ctx.fillText(truncateText(ctx, end, radius * 0.8), nx, cursorY);
     }
@@ -1329,15 +1392,20 @@ function drawTicketStripVariant(ctx, activeDays, style, contentArea, highlightRe
     const midY = (ry0 + ry1) / 2;
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    ctx.font = fontString(style.fontBody, 30 * style.bodyScale);
+    const times = fitStackedTimes(30 * style.bodyScale, 19 * style.bodyScale, ry1 - ry0 - 10);
+    ctx.font = fontString(style.fontBody, times.startSize);
     ctx.fillStyle = textPrimary;
-    ctx.fillText(entry.startTime, bodyX0, midY - 14);
+    ctx.fillText(entry.startTime, bodyX0, midY + times.startDy);
 
     const end = endDisplay(entry);
     if (end) {
-      ctx.font = fontString(style.fontBody, 19 * style.bodyScale);
+      ctx.font = fontString(style.fontBody, times.endSize);
       ctx.fillStyle = textSecondary;
-      ctx.fillText(truncateText(ctx, entry.endTime ? t("render.until", { end }) : end, rx1 - bodyX0 - 12), bodyX0, midY + 18);
+      ctx.fillText(
+        truncateText(ctx, entry.endTime ? t("render.until", { end }) : end, rx1 - bodyX0 - 12),
+        bodyX0,
+        midY + times.endDy
+      );
     }
 
     if (entry.label) {
@@ -1430,14 +1498,17 @@ function drawOrbitRingVariant(ctx, activeDays, style, contentArea, highlightRect
     ctx.fillText(dayLabelShort(entry.day), nx, ny);
 
     let ty = ny + nodeR + 30;
-    ctx.font = fontString(style.fontBody, 24 * style.bodyScale, "bold");
+    const startSize = 24 * style.bodyScale;
+    const endSize = 16 * style.bodyScale;
+    ctx.font = fontString(style.fontBody, startSize, "bold");
     ctx.fillStyle = textPrimary;
     ctx.fillText(entry.startTime, nx, ty);
 
     const end = endDisplay(entry);
     if (end) {
-      ty += 26;
-      ctx.font = fontString(style.fontBody, 16 * style.bodyScale);
+      const step = stackedTimeOffsets(startSize, endSize);
+      ty += step.endDy - step.startDy;
+      ctx.font = fontString(style.fontBody, endSize);
       ctx.fillStyle = textSecondary;
       ctx.fillText(truncateText(ctx, end, 170), nx, ty);
     }
@@ -1516,14 +1587,17 @@ function drawNovaRadiateVariant(ctx, activeDays, style, contentArea, highlightRe
     ctx.fillText(dayLabelShort(entry.day), nx, ny);
 
     let ty = ny + nodeR + 28;
-    ctx.font = fontString(style.fontBody, 22 * style.bodyScale, "bold");
+    const startSize = 22 * style.bodyScale;
+    const endSize = 15 * style.bodyScale;
+    ctx.font = fontString(style.fontBody, startSize, "bold");
     ctx.fillStyle = textPrimary;
     ctx.fillText(entry.startTime, nx, ty);
 
     const end = endDisplay(entry);
     if (end) {
-      ty += 24;
-      ctx.font = fontString(style.fontBody, 15 * style.bodyScale);
+      const step = stackedTimeOffsets(startSize, endSize);
+      ty += step.endDy - step.startDy;
+      ctx.font = fontString(style.fontBody, endSize);
       ctx.fillStyle = textSecondary;
       ctx.fillText(truncateText(ctx, end, 150), nx, ty);
     }
