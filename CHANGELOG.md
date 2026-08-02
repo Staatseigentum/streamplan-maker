@@ -2,6 +2,17 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.20] - 2026-08-03
+
+### Added
+- Day names can now be set independently of the app's own language: follow the app (as before), pin them to German or English, or type your own per day. Handy if you work in one language and stream to an audience that reads another. Picking a language also switches the rest of the plan's wording — the subtitle, "until …", and the weekday/weekend headers — so you never end up with an English "MON" above a German "bis 22:00".
+- Times can be drawn in 12-hour form (6:00 PM) instead of 24-hour (18:00). You still enter them the same way; only the exported graphic changes.
+
+Both live in a new "Plan wording" section in the Customize tab, travel with a saved template, and default to exactly what the app did before — nothing you have already saved will look different.
+
+### Fixed
+- A day with no end time left its start time sitting high in the card with an empty gap underneath, because it kept the raised position that only makes sense above an "until …" line. It is now centred properly in all twelve layouts.
+
 ## [1.0.19] - 2026-08-01
 
 ### Fixed
