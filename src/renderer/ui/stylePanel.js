@@ -13,7 +13,9 @@ import { TemplateGallery } from "./templateGallery.js";
 import { buildAssetsTab } from "./assetsTab.js";
 import { listCustomFonts } from "../rendering/fontLibrary.js";
 import { buildSliderRow } from "./formControls.js";
-import { t } from "../i18n/index.js";
+import { t, dayLabelFull } from "../i18n/index.js";
+import { DAY_NAMES } from "../../shared/constants.js";
+import { dayLabelTable, defaultDayLabel } from "../models/planLabels.js";
 
 // Computed lazily (not module-level consts) since these must reflect the
 // language active when the panel is actually built, not whichever language
@@ -64,6 +66,18 @@ export function backgroundAnimLabels() {
     novaPulse: t("style.animNovaPulse"),
     meteorShower: t("style.animMeteorShower"),
   };
+}
+
+export function dayLabelLanguageLabels() {
+  return {
+    auto: t("style.dayLangAuto"),
+    de: t("style.dayLangDe"),
+    en: t("style.dayLangEn"),
+    custom: t("style.dayLangCustom"),
+  };
+}
+export function timeFormatLabels() {
+  return { "24h": t("style.time24h"), "12h": t("style.time12h") };
 }
 
 export function buildSelectRow(labelText, options, getValue, setValue) {
@@ -477,6 +491,89 @@ export class StylePanel {
     panel.appendChild(actions);
   }
 
+  // How the plan itself is worded: which language the day labels are written
+  // in and whether times read 18:00 or 6:00 PM. Separate from the app's own
+  // Language setting on purpose — the audience a plan is made for isn't
+  // necessarily the language the streamer uses the tool in.
+  _appendPlanTextControls(panel) {
+    const header = document.createElement("div");
+    header.className = "section-header";
+    header.textContent = t("style.planTextHeader");
+    panel.appendChild(header);
+
+    const dayLangRow = buildSelectRow(
+      t("style.dayLabelLanguageLabel"),
+      dayLabelLanguageLabels(),
+      () => this.getStyle().dayLabelLanguage || "auto",
+      (value) => {
+        const style = this.getStyle();
+        style.dayLabelLanguage = value;
+        // Seed the custom fields from whatever is on screen right now, so
+        // switching to "custom" starts from the current labels instead of
+        // seven empty boxes.
+        if (value === "custom" && !Object.keys(style.dayLabels || {}).length) {
+          style.dayLabels = dayLabelTable("auto");
+        }
+        this.onStyleChange(style);
+        refreshCustomVisibility();
+      }
+    );
+    panel.appendChild(dayLangRow.el);
+    this._refreshers.push(dayLangRow.refresh);
+
+    const customWrap = document.createElement("div");
+    customWrap.className = "day-label-grid";
+    DAY_NAMES.forEach((day) => {
+      const row = document.createElement("label");
+      row.className = "day-label-row";
+      const name = document.createElement("span");
+      name.textContent = dayLabelFull(day);
+      const input = document.createElement("input");
+      input.type = "text";
+      input.maxLength = 12;
+      input.addEventListener("input", () => {
+        const style = this.getStyle();
+        style.dayLabels = { ...(style.dayLabels || {}) };
+        const value = input.value.trim();
+        if (value) style.dayLabels[day] = value;
+        else delete style.dayLabels[day];
+        this.onStyleChange(style);
+      });
+      row.append(name, input);
+      customWrap.appendChild(row);
+      this._refreshers.push(() => {
+        const style = this.getStyle();
+        input.value = (style.dayLabels || {})[day] || "";
+        input.placeholder = defaultDayLabel("auto", day);
+      });
+    });
+    panel.appendChild(customWrap);
+
+    const refreshCustomVisibility = () => {
+      customWrap.hidden = (this.getStyle().dayLabelLanguage || "auto") !== "custom";
+    };
+    this._refreshers.push(refreshCustomVisibility);
+    refreshCustomVisibility();
+
+    const timeFormatRow = buildSelectRow(
+      t("style.timeFormatLabel"),
+      timeFormatLabels(),
+      () => this.getStyle().timeFormat || "24h",
+      (value) => {
+        const style = this.getStyle();
+        style.timeFormat = value;
+        this.onStyleChange(style);
+      }
+    );
+    panel.appendChild(timeFormatRow.el);
+    this._refreshers.push(timeFormatRow.refresh);
+
+    const hint = document.createElement("div");
+    hint.className = "field-hint";
+    hint.textContent = t("style.planTextHint");
+    panel.appendChild(hint);
+  }
+
   _appendStyleControls(panel) {
     const colorsHeader = document.createElement("div");
     colorsHeader.className = "section-header";
@@ -619,6 +716,8 @@ export class StylePanel {
     bgAnimHint.className = "field-hint";
     bgAnimHint.textContent = t("style.bgAnimHint");
     panel.appendChild(bgAnimHint);
+
+    this._appendPlanTextControls(panel);
 
     const imagesHeader = document.createElement("div");
     imagesHeader.className = "section-header";

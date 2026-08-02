@@ -288,6 +288,18 @@ export const STRINGS = {
     "style.backgroundLabel": "Background",
     "style.backgroundMotionLabel": "Background Motion",
     "style.bgAnimHint": "Adds a subtle animated backdrop that shows in the live preview and every export, including the animated GIF.",
+
+    "style.planTextHeader": "Plan Wording",
+    "style.dayLabelLanguageLabel": "Day Names",
+    "style.dayLangAuto": "Follow app language",
+    "style.dayLangDe": "German (MO, DI, MI …)",
+    "style.dayLangEn": "English (MON, TUE, WED …)",
+    "style.dayLangCustom": "Custom",
+    "style.timeFormatLabel": "Time Format",
+    "style.time24h": "24-hour (18:00)",
+    "style.time12h": "12-hour (6:00 PM)",
+    "style.planTextHint": "Applies to the plan itself, not to the app — so you can work in one language and publish in another. Leave a custom day empty to keep its normal label.",
+
     "style.customImagesHint": "Upload images/GIFs in the Assets tab, then fine-tune each one here.",
     "style.noCustomImages": "No custom images uploaded yet.",
 
@@ -814,6 +826,18 @@ export const STRINGS = {
     "style.backgroundLabel": "Hintergrund",
     "style.backgroundMotionLabel": "Hintergrundbewegung",
     "style.bgAnimHint": "Fügt einen dezent animierten Hintergrund hinzu, der in der Live-Vorschau und jedem Export — einschließlich des animierten GIFs — sichtbar ist.",
+
+    "style.planTextHeader": "Beschriftung des Plans",
+    "style.dayLabelLanguageLabel": "Tagesnamen",
+    "style.dayLangAuto": "Wie die App-Sprache",
+    "style.dayLangDe": "Deutsch (MO, DI, MI …)",
+    "style.dayLangEn": "Englisch (MON, TUE, WED …)",
+    "style.dayLangCustom": "Eigene",
+    "style.timeFormatLabel": "Zeitformat",
+    "style.time24h": "24 Stunden (18:00)",
+    "style.time12h": "12 Stunden (6:00 PM)",
+    "style.planTextHint": "Gilt für den Plan selbst, nicht für die App — du kannst also in einer Sprache arbeiten und in einer anderen veröffentlichen. Ein leeres Feld behält die normale Beschriftung.",
+
     "style.customImagesHint": "Lade Bilder/GIFs im Tab Ressourcen hoch und feile sie hier weiter aus.",
     "style.noCustomImages": "Noch keine eigenen Bilder hochgeladen.",
 

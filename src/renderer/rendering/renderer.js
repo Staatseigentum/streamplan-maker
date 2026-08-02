@@ -11,7 +11,8 @@ import { drawAnimatedBackground } from "./animatedBackgrounds.js";
 import { isGifPath, getGifStickerFrame } from "./gifSticker.js";
 import { elementRectPx, elementCenterPx } from "../models/customLayout.js";
 import { applyElementAnimation, drawElementGlow } from "./elementAnimations.js";
-import { t, dayLabelShort } from "../i18n/index.js";
+import { t } from "../i18n/index.js";
+import { dayLabelFor, formatTime, formatEndDisplay, planText } from "../models/planLabels.js";
 
 // One full loop of our own GIF export (24 frames × 80ms) — animated sticker
 // frames are sampled against this timeline when t is driving the render, so
@@ -71,7 +72,12 @@ function wrapText(ctx, text, maxWidth, maxLines) {
 //
 // The leading is proportional rather than a constant, so the breathing room
 // grows with the text instead of being eaten by it.
-function stackedTimeOffsets(startSize, endSize) {
+// `hasEnd` false means no "bis …" line gets drawn at all — the day has no end
+// time or duration, or a Custom Layout element opted out of it. The start time
+// then owns the whole box and sits dead centre, instead of keeping the raised
+// position that only makes sense as the top half of a pair.
+function stackedTimeOffsets(startSize, endSize, hasEnd = true) {
+  if (!hasEnd) return { startDy: 0, endDy: 0, blockH: startSize };
   const gap = Math.max(4, (startSize + endSize) * 0.08);
   return {
     startDy: -(endSize + gap) / 2,
@@ -80,19 +86,31 @@ function stackedTimeOffsets(startSize, endSize) {
   };
 }
 
+// The other half of the layouts hang the times off a fixed anchor — under a
+// day node — rather than centring them in a card, so they can't use
+// stackedTimeOffsets' symmetric result. Same idea though: a lone start time
+// lands where the pair's midpoint would have been, instead of sitting high
+// with a hole underneath it. `maxStep` carries each layout's own clamp on how
+// far down it may go before running out of card.
+function anchoredTimeOffsets(startSize, endSize, hasEnd, maxStep = Infinity) {
+  const pair = stackedTimeOffsets(startSize, endSize, true);
+  const step = Math.min(pair.endDy - pair.startDy, maxStep);
+  return { startDy: hasEnd ? 0 : step / 2, endDy: step };
+}
+
 // Shrinks a start/end time pair until the stack fits `available` pixels, so a
 // large bodyScale can't push the times out of their card. Returns the sizes to
 // actually draw with plus the offsets for them.
-function fitStackedTimes(startSize, endSize, available) {
+function fitStackedTimes(startSize, endSize, available, hasEnd = true) {
   let s = startSize;
   let e = endSize;
-  const first = stackedTimeOffsets(s, e);
+  const first = stackedTimeOffsets(s, e, hasEnd);
   if (available > 0 && first.blockH > available) {
     const k = available / first.blockH;
     s *= k;
     e *= k;
   }
-  const o = stackedTimeOffsets(s, e);
+  const o = stackedTimeOffsets(s, e, hasEnd);
   return { startSize: s, endSize: e, startDy: o.startDy, endDy: o.endDy };
 }
 
@@ -120,7 +138,7 @@ function drawEmptyState(ctx, contentArea, style) {
   ctx.font = fontString(style.fontBody, 34 * style.bodyScale);
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.fillText(t("render.noDays"), (x0 + x1) / 2, (y0 + y1) / 2);
+  ctx.fillText(planText(style, "render.noDays"), (x0 + x1) / 2, (y0 + y1) / 2);
 }
 
 function drawHeader(ctx, size, profile, style, headerRect, highlightRects) {
@@ -168,7 +186,7 @@ function drawHeader(ctx, size, profile, style, headerRect, highlightRects) {
 
   ctx.font = fontString(style.fontBody, 24 * style.bodyScale);
   ctx.fillStyle = textSecondary;
-  ctx.fillText(t("render.title"), centerX, nameY + 78);
+  ctx.fillText(planText(style, "render.title"), centerX, nameY + 78);
 
   ctx.strokeStyle = hexToRgba(accent, 0.78);
   ctx.lineWidth = 2;
@@ -238,25 +256,25 @@ function drawDayCard(ctx, entry, rect, style, highlightRects, stripe = true, rot
   ctx.textBaseline = "middle";
   ctx.font = fontString(style.fontHeading, 40 * style.headingScale, "bold");
   ctx.fillStyle = accent;
-  ctx.fillText(dayLabelShort(entry.day), labelX, topMidY);
+  ctx.fillText(dayLabelFor(style, entry.day), labelX, topMidY);
 
   const timeX = labelX + 190;
   // The band the time stack may occupy: the card minus whatever the note took.
   const timeBandH = (entry.label ? rowH - noteBandH : rowH) - 12;
-  const times = fitStackedTimes(44 * style.bodyScale, 30 * style.bodyScale, timeBandH);
+  // Resolved before anything is drawn, because whether there's a second line
+  // decides where the first one goes.
+  const end = opts.skipDuration ? null : formatEndDisplay(style, endDisplay(entry));
+  const times = fitStackedTimes(44 * style.bodyScale, 30 * style.bodyScale, timeBandH, !!end);
   if (!opts.skipTime) {
     ctx.font = fontString(style.fontBody, times.startSize);
     ctx.fillStyle = textPrimary;
-    ctx.fillText(entry.startTime, timeX, topMidY + times.startDy);
+    ctx.fillText(formatTime(style, entry.startTime), timeX, topMidY + times.startDy);
   }
 
-  if (!opts.skipDuration) {
-    const end = endDisplay(entry);
-    if (end) {
-      ctx.font = fontString(style.fontBody, times.endSize);
-      ctx.fillStyle = textSecondary;
-      ctx.fillText(entry.endTime ? t("render.until", { end }) : end, timeX, topMidY + times.endDy);
-    }
+  if (end) {
+    ctx.font = fontString(style.fontBody, times.endSize);
+    ctx.fillStyle = textSecondary;
+    ctx.fillText(entry.endTime ? planText(style, "render.until", { end }) : end, timeX, topMidY + times.endDy);
   }
 
   if (entry.label && noteBandH >= noteLineH) {
@@ -315,7 +333,7 @@ function drawHeaderElement(ctx, rect, profile, style, highlightRects, rotationIn
 
   ctx.font = fontString(style.fontBody, 24 * style.bodyScale);
   ctx.fillStyle = textSecondary;
-  ctx.fillText(t("render.title"), centerX, nameY + Math.min(78, boxH * 0.3));
+  ctx.fillText(planText(style, "render.title"), centerX, nameY + Math.min(78, boxH * 0.3));
 
   ctx.strokeStyle = hexToRgba(accent, 0.78);
   ctx.lineWidth = 2;
@@ -374,31 +392,27 @@ function drawBadgeCardSkin(ctx, entry, rect, style, highlightRects, stripe = tru
   ctx.textBaseline = "middle";
   ctx.font = fontString(style.fontBody, Math.min(30, nodeR * 0.85) * style.bodyScale);
   ctx.fillStyle = "#0A0A0F";
-  ctx.fillText(dayLabelShort(entry.day), cx, nodeCy);
+  ctx.fillText(dayLabelFor(style, entry.day), cx, nodeCy);
 
   let remaining = y1 - (nodeCy + nodeR + 10);
   if (remaining >= 24) {
     const timeY = nodeCy + nodeR + Math.min(40, remaining * 0.5);
     const startSize = Math.min(40, remaining * 0.4) * style.headingScale;
     const endSize = 24 * style.bodyScale;
+    const roomBelow = y1 - (timeY + 20);
+    const rawEnd = opts.skipDuration ? null : formatEndDisplay(style, endDisplay(entry));
+    const end = rawEnd && roomBelow >= 20 ? rawEnd : null;
+    const off = anchoredTimeOffsets(startSize, endSize, !!end, Math.max(0, roomBelow));
     if (!opts.skipTime) {
       ctx.font = fontString(style.fontHeading, startSize, "bold");
       ctx.fillStyle = textPrimary;
-      ctx.fillText(truncateText(ctx, entry.startTime, rectW - 16), cx, timeY);
+      ctx.fillText(truncateText(ctx, formatTime(style, entry.startTime), rectW - 16), cx, timeY + off.startDy);
     }
 
-    if (!opts.skipDuration) {
-      const end = endDisplay(entry);
-      remaining = y1 - (timeY + 20);
-      if (end && remaining >= 20) {
-        // Separation from the type sizes, not a fixed 40px cap — see
-        // stackedTimeOffsets. Still bounded by the space left in the card.
-        const step = stackedTimeOffsets(startSize, endSize);
-        const endY = timeY + Math.min(step.endDy - step.startDy, remaining);
-        ctx.font = fontString(style.fontBody, endSize);
-        ctx.fillStyle = textSecondary;
-        ctx.fillText(truncateText(ctx, end, rectW - 16), cx, endY);
-      }
+    if (end) {
+      ctx.font = fontString(style.fontBody, endSize);
+      ctx.fillStyle = textSecondary;
+      ctx.fillText(truncateText(ctx, end, rectW - 16), cx, timeY + off.endDy);
     }
   }
 
@@ -431,7 +445,7 @@ function drawCalendarCardSkin(ctx, entry, rect, style, highlightRects, stripe = 
   ctx.textBaseline = "middle";
   ctx.font = fontString(style.fontHeading, Math.min(24, headerH * 0.55) * style.headingScale, "bold");
   ctx.fillStyle = "#0A0A0F";
-  ctx.fillText(dayLabelShort(entry.day), (x0 + x1) / 2, y0 + headerH / 2);
+  ctx.fillText(dayLabelFor(style, entry.day), (x0 + x1) / 2, y0 + headerH / 2);
 
   if (entry.imagePath) {
     const imgSize = Math.min(headerH - 8, 40);
@@ -445,24 +459,22 @@ function drawCalendarCardSkin(ctx, entry, rect, style, highlightRects, stripe = 
   const cx = (x0 + x1) / 2;
   const remaining = rectH - headerH;
   if (remaining >= 26) {
-    let ty = y0 + headerH + Math.min(46, remaining * 0.4);
+    const ty = y0 + headerH + Math.min(46, remaining * 0.4);
     const startSize = Math.min(30, remaining * 0.28) * style.bodyScale;
     const endSize = 19 * style.bodyScale;
+    const rawEnd = opts.skipDuration ? null : formatEndDisplay(style, endDisplay(entry));
+    const end = rawEnd && y1 - ty >= 24 ? rawEnd : null;
+    const off = anchoredTimeOffsets(startSize, endSize, !!end, Math.max(0, (y1 - ty) * 0.6));
     if (!opts.skipTime) {
       ctx.font = fontString(style.fontBody, startSize, "bold");
       ctx.fillStyle = textPrimary;
-      ctx.fillText(truncateText(ctx, entry.startTime, rectW - 16), cx, ty);
+      ctx.fillText(truncateText(ctx, formatTime(style, entry.startTime), rectW - 16), cx, ty + off.startDy);
     }
 
-    if (!opts.skipDuration) {
-      const end = endDisplay(entry);
-      if (end && y1 - ty >= 24) {
-        const step = stackedTimeOffsets(startSize, endSize);
-        ty += Math.min(step.endDy - step.startDy, (y1 - ty) * 0.6);
-        ctx.font = fontString(style.fontBody, endSize);
-        ctx.fillStyle = textSecondary;
-        ctx.fillText(truncateText(ctx, end, rectW - 16), cx, ty);
-      }
+    if (end) {
+      ctx.font = fontString(style.fontBody, endSize);
+      ctx.fillStyle = textSecondary;
+      ctx.fillText(truncateText(ctx, end, rectW - 16), cx, ty + off.endDy);
     }
   }
 
@@ -503,7 +515,7 @@ function drawTicketCardSkin(ctx, entry, rect, style, highlightRects, stripe = tr
   ctx.textBaseline = "middle";
   ctx.font = fontString(style.fontHeading, Math.min(26, stubW * 0.55, rectH * 0.4) * style.headingScale, "bold");
   ctx.fillStyle = "#0A0A0F";
-  ctx.fillText(dayLabelShort(entry.day), 0, 0);
+  ctx.fillText(dayLabelFor(style, entry.day), 0, 0);
   ctx.restore();
 
   const bodyX0 = rx0 + stubW + 20;
@@ -516,28 +528,29 @@ function drawTicketCardSkin(ctx, entry, rect, style, highlightRects, stripe = tr
   if (bodyX1 - bodyX0 >= 40) {
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
+    // The second line also needs the card to be tall enough, so that condition
+    // is part of "is there an end line" and therefore of the centring decision.
+    const end = opts.skipDuration || rectH < 60 ? null : formatEndDisplay(style, endDisplay(entry));
     const times = fitStackedTimes(
       Math.min(30, rectH * 0.3) * style.bodyScale,
       19 * style.bodyScale,
-      rectH - 10
+      rectH - 10,
+      !!end
     );
     if (!opts.skipTime) {
       ctx.font = fontString(style.fontBody, times.startSize);
       ctx.fillStyle = textPrimary;
-      ctx.fillText(truncateText(ctx, entry.startTime, bodyX1 - bodyX0 - 12), bodyX0, midY + times.startDy);
+      ctx.fillText(truncateText(ctx, formatTime(style, entry.startTime), bodyX1 - bodyX0 - 12), bodyX0, midY + times.startDy);
     }
 
-    if (!opts.skipDuration) {
-      const end = endDisplay(entry);
-      if (end && rectH >= 60) {
-        ctx.font = fontString(style.fontBody, times.endSize);
-        ctx.fillStyle = textSecondary;
-        ctx.fillText(
-          truncateText(ctx, entry.endTime ? t("render.until", { end }) : end, bodyX1 - bodyX0 - 12),
-          bodyX0,
-          midY + times.endDy
-        );
-      }
+    if (end) {
+      ctx.font = fontString(style.fontBody, times.endSize);
+      ctx.fillStyle = textSecondary;
+      ctx.fillText(
+        truncateText(ctx, entry.endTime ? planText(style, "render.until", { end }) : end, bodyX1 - bodyX0 - 12),
+        bodyX0,
+        midY + times.endDy
+      );
     }
   }
 
@@ -574,7 +587,7 @@ function drawCompactCardSkin(ctx, entry, rect, style, highlightRects, stripe = t
 
   ctx.font = fontString(style.fontHeading, Math.min(30, rectH * 0.4) * style.headingScale, "bold");
   ctx.fillStyle = accent;
-  const dayLabel = dayLabelShort(entry.day);
+  const dayLabel = dayLabelFor(style, entry.day);
   const dayText = truncateText(ctx, dayLabel, Math.max(0, maxTx - tx));
   ctx.fillText(dayText, tx, midY);
   tx += ctx.measureText(dayText + "  ").width;
@@ -584,8 +597,8 @@ function drawCompactCardSkin(ctx, entry, rect, style, highlightRects, stripe = t
   // (always paired with skipDuration by drawCustomLayout) gates the whole
   // block rather than each half independently.
   if (!opts.skipTime && maxTx - tx > 20) {
-    const end = endDisplay(entry);
-    const timeText = end ? `${entry.startTime}–${end}` : entry.startTime;
+    const end = formatEndDisplay(style, endDisplay(entry));
+    const timeText = end ? `${formatTime(style, entry.startTime)}–${end}` : formatTime(style, entry.startTime);
     ctx.font = fontString(style.fontBody, Math.min(30, rectH * 0.35) * style.bodyScale);
     ctx.fillStyle = textPrimary;
     const shownTime = truncateText(ctx, timeText, maxTx - tx);
@@ -633,29 +646,27 @@ function drawRingCardSkin(ctx, entry, rect, style, highlightRects, stripe = true
   ctx.textBaseline = "middle";
   ctx.font = fontString(style.fontHeading, Math.min(22, nodeR * 0.6) * style.headingScale, "bold");
   ctx.fillStyle = "#0A0A0F";
-  ctx.fillText(dayLabelShort(entry.day), cx, cy);
+  ctx.fillText(dayLabelFor(style, entry.day), cx, cy);
 
   let remaining = y1 - (cy + nodeR + 8);
   if (remaining >= 24) {
-    let ty = cy + nodeR + Math.min(30, remaining * 0.5);
+    const ty = cy + nodeR + Math.min(30, remaining * 0.5);
     const startSize = Math.min(24, remaining * 0.4) * style.bodyScale;
     const endSize = 16 * style.bodyScale;
+    const roomBelow = y1 - (ty + 16);
+    const rawEnd = opts.skipDuration ? null : formatEndDisplay(style, endDisplay(entry));
+    const end = rawEnd && roomBelow >= 18 ? rawEnd : null;
+    const off = anchoredTimeOffsets(startSize, endSize, !!end, Math.max(0, roomBelow));
     if (!opts.skipTime) {
       ctx.font = fontString(style.fontBody, startSize, "bold");
       ctx.fillStyle = textPrimary;
-      ctx.fillText(truncateText(ctx, entry.startTime, rectW - 16), cx, ty);
+      ctx.fillText(truncateText(ctx, formatTime(style, entry.startTime), rectW - 16), cx, ty + off.startDy);
     }
 
-    if (!opts.skipDuration) {
-      const end = endDisplay(entry);
-      remaining = y1 - (ty + 16);
-      if (end && remaining >= 18) {
-        const step = stackedTimeOffsets(startSize, endSize);
-        ty += Math.min(step.endDy - step.startDy, remaining);
-        ctx.font = fontString(style.fontBody, endSize);
-        ctx.fillStyle = textSecondary;
-        ctx.fillText(truncateText(ctx, end, rectW - 16), cx, ty);
-      }
+    if (end) {
+      ctx.font = fontString(style.fontBody, endSize);
+      ctx.fillStyle = textSecondary;
+      ctx.fillText(truncateText(ctx, end, rectW - 16), cx, ty + off.endDy);
     }
   }
 
@@ -681,9 +692,9 @@ const CARD_SKIN_DRAWERS = {
 // the user actually customizes one of these elements.
 function drawDayTimeElement(ctx, rect, el, entry, style) {
   const isDuration = el.timeField === "duration";
-  const raw = isDuration ? endDisplay(entry) : entry.startTime;
+  const raw = isDuration ? formatEndDisplay(style, endDisplay(entry)) : formatTime(style, entry.startTime);
   if (!raw) return;
-  const text = isDuration && entry.endTime ? t("render.until", { end: raw }) : raw;
+  const text = isDuration && entry.endTime ? planText(style, "render.until", { end: raw }) : raw;
 
   const [x0, y0, x1, y1] = rect;
   const rectW = x1 - x0;
@@ -997,21 +1008,21 @@ function drawGridVariant(ctx, activeDays, style, contentArea, highlightRects) {
     ctx.textBaseline = "middle";
     ctx.font = fontString(style.fontBody, 30 * style.bodyScale);
     ctx.fillStyle = "#0A0A0F";
-    ctx.fillText(dayLabelShort(entry.day), cx, nodeCy);
+    ctx.fillText(dayLabelFor(style, entry.day), cx, nodeCy);
 
     const timeY = nodeCy + nodeR + 40;
     const startSize = 40 * style.headingScale;
     const endSize = 30 * style.bodyScale;
+    const end = formatEndDisplay(style, endDisplay(entry));
+    const off = anchoredTimeOffsets(startSize, endSize, !!end);
     ctx.font = fontString(style.fontHeading, startSize, "bold");
     ctx.fillStyle = textPrimary;
-    ctx.fillText(entry.startTime, cx, timeY);
+    ctx.fillText(formatTime(style, entry.startTime), cx, timeY + off.startDy);
 
-    const end = endDisplay(entry);
     if (end) {
-      const step = stackedTimeOffsets(startSize, endSize);
       ctx.font = fontString(style.fontBody, endSize);
       ctx.fillStyle = textSecondary;
-      ctx.fillText(end, cx, timeY + (step.endDy - step.startDy));
+      ctx.fillText(end, cx, timeY + off.endDy);
     }
 
     if (entry.label) {
@@ -1100,23 +1111,22 @@ function drawCalendarGridVariant(ctx, activeDays, style, contentArea, highlightR
     ctx.textBaseline = "middle";
     ctx.font = fontString(style.fontHeading, 24 * style.headingScale, "bold");
     ctx.fillStyle = "#0A0A0F";
-    ctx.fillText(dayLabelShort(entry.day), (x0 + x1) / 2, y0 + headerH / 2);
+    ctx.fillText(dayLabelFor(style, entry.day), (x0 + x1) / 2, y0 + headerH / 2);
 
     const cx = (x0 + x1) / 2;
     let ty = y0 + headerH + 46;
     const startSize = 30 * style.bodyScale;
     const endSize = 19 * style.bodyScale;
+    const end = formatEndDisplay(style, endDisplay(entry));
+    const off = anchoredTimeOffsets(startSize, endSize, !!end);
     ctx.font = fontString(style.fontBody, startSize, "bold");
     ctx.fillStyle = textPrimary;
-    ctx.fillText(truncateText(ctx, entry.startTime, x1 - x0 - 16), cx, ty);
+    ctx.fillText(truncateText(ctx, formatTime(style, entry.startTime), x1 - x0 - 16), cx, ty + off.startDy);
 
-    const end = endDisplay(entry);
     if (end) {
-      const step = stackedTimeOffsets(startSize, endSize);
-      ty += step.endDy - step.startDy;
       ctx.font = fontString(style.fontBody, endSize);
       ctx.fillStyle = textSecondary;
-      ctx.fillText(truncateText(ctx, end, x1 - x0 - 16), cx, ty);
+      ctx.fillText(truncateText(ctx, end, x1 - x0 - 16), cx, ty + off.endDy);
     }
 
     if (entry.label) {
@@ -1157,10 +1167,10 @@ function drawCompactBadgesVariant(ctx, activeDays, style, contentArea, highlight
   const headingFont = ctx.font;
 
   const items = activeDays.map((entry) => {
-    const end = endDisplay(entry);
-    const timeText = end ? `${entry.startTime}–${end}` : entry.startTime;
+    const end = formatEndDisplay(style, endDisplay(entry));
+    const timeText = end ? `${formatTime(style, entry.startTime)}–${end}` : formatTime(style, entry.startTime);
     ctx.font = headingFont;
-    const dayW = ctx.measureText((dayLabelShort(entry.day)) + "  ").width;
+    const dayW = ctx.measureText((dayLabelFor(style, entry.day)) + "  ").width;
     ctx.font = bodyFont;
     const timeW = ctx.measureText(timeText).width;
     const labelW = entry.label ? ctx.measureText("  ·  " + entry.label).width : 0;
@@ -1183,7 +1193,7 @@ function drawCompactBadgesVariant(ctx, activeDays, style, contentArea, highlight
     ctx.textBaseline = "middle";
     ctx.font = headingFont;
     ctx.fillStyle = accent;
-    const dayLabel = dayLabelShort(item.entry.day);
+    const dayLabel = dayLabelFor(style, item.entry.day);
     ctx.fillText(dayLabel, tx, midY);
     tx += ctx.measureText(dayLabel + "  ").width;
 
@@ -1234,15 +1244,15 @@ function drawSplitColumnsVariant(ctx, activeDays, style, contentArea, highlightR
       ctx.fillStyle = textSecondary;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.fillText(t("render.noDaysHere"), (x0 + x1) / 2, (innerArea[1] + innerArea[3]) / 2);
+      ctx.fillText(planText(style, "render.noDaysHere"), (x0 + x1) / 2, (innerArea[1] + innerArea[3]) / 2);
       return;
     }
     const rects = layout.listRows(innerArea, days.length);
     days.forEach((entry, i) => drawDayCard(ctx, entry, rects[i], style, highlightRects, false));
   };
 
-  drawColumn(leftRect, t("render.weekdays"), weekdays);
-  drawColumn(rightRect, t("render.weekend"), weekend);
+  drawColumn(leftRect, planText(style, "render.weekdays"), weekdays);
+  drawColumn(rightRect, planText(style, "render.weekend"), weekend);
 }
 
 function drawRadialClockVariant(ctx, activeDays, style, contentArea, highlightRects) {
@@ -1295,19 +1305,20 @@ function drawRadialClockVariant(ctx, activeDays, style, contentArea, highlightRe
     ctx.textBaseline = "middle";
     ctx.font = fontString(style.fontHeading, 22 * style.headingScale, "bold");
     ctx.fillStyle = "#0A0A0F";
-    ctx.fillText(dayLabelShort(entry.day), nx, ny);
+    ctx.fillText(dayLabelFor(style, entry.day), nx, ny);
 
     const startSize = 25 * style.bodyScale;
     const endSize = 17 * style.bodyScale;
+    const anchorY = ny + nodeR + 32;
+    const end = formatEndDisplay(style, endDisplay(entry));
+    const off = anchoredTimeOffsets(startSize, endSize, !!end);
     ctx.font = fontString(style.fontBody, startSize, "bold");
     ctx.fillStyle = textPrimary;
-    ctx.fillText(entry.startTime, nx, ny + nodeR + 32);
+    ctx.fillText(formatTime(style, entry.startTime), nx, anchorY + off.startDy);
 
-    let cursorY = ny + nodeR + 32;
-    const end = endDisplay(entry);
+    let cursorY = anchorY + off.startDy;
     if (end) {
-      const step = stackedTimeOffsets(startSize, endSize);
-      cursorY += step.endDy - step.startDy;
+      cursorY = anchorY + off.endDy;
       ctx.font = fontString(style.fontBody, endSize);
       ctx.fillStyle = textSecondary;
       ctx.fillText(truncateText(ctx, end, radius * 0.8), nx, cursorY);
@@ -1385,24 +1396,24 @@ function drawTicketStripVariant(ctx, activeDays, style, contentArea, highlightRe
     ctx.textBaseline = "middle";
     ctx.font = fontString(style.fontHeading, 26 * style.headingScale, "bold");
     ctx.fillStyle = "#0A0A0F";
-    ctx.fillText(dayLabelShort(entry.day), 0, 0);
+    ctx.fillText(dayLabelFor(style, entry.day), 0, 0);
     ctx.restore();
 
     const bodyX0 = rx0 + stubW + 20;
     const midY = (ry0 + ry1) / 2;
     ctx.textAlign = "left";
     ctx.textBaseline = "middle";
-    const times = fitStackedTimes(30 * style.bodyScale, 19 * style.bodyScale, ry1 - ry0 - 10);
+    const end = formatEndDisplay(style, endDisplay(entry));
+    const times = fitStackedTimes(30 * style.bodyScale, 19 * style.bodyScale, ry1 - ry0 - 10, !!end);
     ctx.font = fontString(style.fontBody, times.startSize);
     ctx.fillStyle = textPrimary;
-    ctx.fillText(entry.startTime, bodyX0, midY + times.startDy);
+    ctx.fillText(formatTime(style, entry.startTime), bodyX0, midY + times.startDy);
 
-    const end = endDisplay(entry);
     if (end) {
       ctx.font = fontString(style.fontBody, times.endSize);
       ctx.fillStyle = textSecondary;
       ctx.fillText(
-        truncateText(ctx, entry.endTime ? t("render.until", { end }) : end, rx1 - bodyX0 - 12),
+        truncateText(ctx, entry.endTime ? planText(style, "render.until", { end }) : end, rx1 - bodyX0 - 12),
         bodyX0,
         midY + times.endDy
       );
@@ -1495,19 +1506,20 @@ function drawOrbitRingVariant(ctx, activeDays, style, contentArea, highlightRect
     ctx.textBaseline = "middle";
     ctx.font = fontString(style.fontHeading, 22 * style.headingScale, "bold");
     ctx.fillStyle = "#0A0A0F";
-    ctx.fillText(dayLabelShort(entry.day), nx, ny);
+    ctx.fillText(dayLabelFor(style, entry.day), nx, ny);
 
-    let ty = ny + nodeR + 30;
+    const anchorY = ny + nodeR + 30;
     const startSize = 24 * style.bodyScale;
     const endSize = 16 * style.bodyScale;
+    const end = formatEndDisplay(style, endDisplay(entry));
+    const off = anchoredTimeOffsets(startSize, endSize, !!end);
     ctx.font = fontString(style.fontBody, startSize, "bold");
     ctx.fillStyle = textPrimary;
-    ctx.fillText(entry.startTime, nx, ty);
+    ctx.fillText(formatTime(style, entry.startTime), nx, anchorY + off.startDy);
 
-    const end = endDisplay(entry);
+    let ty = anchorY + off.startDy;
     if (end) {
-      const step = stackedTimeOffsets(startSize, endSize);
-      ty += step.endDy - step.startDy;
+      ty = anchorY + off.endDy;
       ctx.font = fontString(style.fontBody, endSize);
       ctx.fillStyle = textSecondary;
       ctx.fillText(truncateText(ctx, end, 170), nx, ty);
@@ -1584,22 +1596,21 @@ function drawNovaRadiateVariant(ctx, activeDays, style, contentArea, highlightRe
     ctx.textBaseline = "middle";
     ctx.font = fontString(style.fontHeading, 20 * style.headingScale, "bold");
     ctx.fillStyle = "#0A0A0F";
-    ctx.fillText(dayLabelShort(entry.day), nx, ny);
+    ctx.fillText(dayLabelFor(style, entry.day), nx, ny);
 
-    let ty = ny + nodeR + 28;
+    const anchorY = ny + nodeR + 28;
     const startSize = 22 * style.bodyScale;
     const endSize = 15 * style.bodyScale;
+    const end = formatEndDisplay(style, endDisplay(entry));
+    const off = anchoredTimeOffsets(startSize, endSize, !!end);
     ctx.font = fontString(style.fontBody, startSize, "bold");
     ctx.fillStyle = textPrimary;
-    ctx.fillText(entry.startTime, nx, ty);
+    ctx.fillText(formatTime(style, entry.startTime), nx, anchorY + off.startDy);
 
-    const end = endDisplay(entry);
     if (end) {
-      const step = stackedTimeOffsets(startSize, endSize);
-      ty += step.endDy - step.startDy;
       ctx.font = fontString(style.fontBody, endSize);
       ctx.fillStyle = textSecondary;
-      ctx.fillText(truncateText(ctx, end, 150), nx, ty);
+      ctx.fillText(truncateText(ctx, end, 150), nx, anchorY + off.endDy);
     }
 
     highlightRects.push([nx - nodeR, ny - nodeR, nx + nodeR, ny + nodeR]);

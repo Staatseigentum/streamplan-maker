@@ -1,5 +1,6 @@
 import { sanitizeCustomLayout } from "./customLayout.js";
 import { BACKGROUND_ANIM_VALUES } from "../rendering/animatedBackgrounds.js";
+import { DAY_NAMES } from "../../shared/constants.js";
 
 export const COLOR_KEYS = [
   "background",
@@ -29,6 +30,18 @@ export const LAYOUT_VARIANTS = [
 export const BACKGROUND_MODES = ["solid", "gradient", "image"];
 export const CORNER_STYLES = ["sharp", "rounded"];
 export const BACKGROUND_TEXTURES = ["none", "grain", "dots", "diagonal", "grid"];
+
+// The language of the day labels *in the exported graphic* — deliberately
+// separate from the app's own UI language, because the audience a streamer
+// makes the plan for isn't necessarily the language they use the tool in.
+// "auto" keeps the old behaviour (follow the UI language), which is why it's
+// the default: every project and template saved before this existed keeps
+// rendering exactly as it did. "custom" reads style.dayLabels instead.
+export const DAY_LABEL_LANGUAGES = ["auto", "de", "en", "custom"];
+
+// 24h ("18:00") vs. 12h ("6:00 PM"). Stored times are always 24h; this only
+// affects how they're drawn.
+export const TIME_FORMATS = ["24h", "12h"];
 
 export const FONT_SCALE_MIN = 0.7;
 export const FONT_SCALE_MAX = 1.6;
@@ -69,6 +82,9 @@ export function createStyleConfig({
   backgroundGradientAngle = 180,
   backgroundTexture = "none",
   backgroundTextureOpacity = 0.15,
+  dayLabelLanguage = "auto",
+  dayLabels = {},
+  timeFormat = "24h",
 } = {}) {
   return {
     templateId,
@@ -115,6 +131,11 @@ export function createStyleConfig({
     // see rendering/layout.js's drawBackgroundTexture.
     backgroundTexture: BACKGROUND_TEXTURES.includes(backgroundTexture) ? backgroundTexture : "none",
     backgroundTextureOpacity,
+    // How the day labels and times are written in the exported graphic — see
+    // DAY_LABEL_LANGUAGES / TIME_FORMATS above and models/planLabels.js.
+    dayLabelLanguage: DAY_LABEL_LANGUAGES.includes(dayLabelLanguage) ? dayLabelLanguage : "auto",
+    dayLabels: { ...dayLabels },
+    timeFormat: TIME_FORMATS.includes(timeFormat) ? timeFormat : "24h",
   };
 }
 
@@ -157,6 +178,9 @@ export function styleToDict(style) {
     background_gradient_angle: style.backgroundGradientAngle,
     background_texture: style.backgroundTexture || "none",
     background_texture_opacity: style.backgroundTextureOpacity,
+    day_label_language: style.dayLabelLanguage || "auto",
+    day_labels: { ...(style.dayLabels || {}) },
+    time_format: style.timeFormat || "24h",
   };
 }
 
@@ -172,6 +196,23 @@ const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 // renderer, mirroring customLayout.js's sanitizeCustomLayout approach.
 // Needs at least 2 valid stops to be usable; anything less falls back to
 // null (the legacy 2-stop colors.background/backgroundEnd gradient).
+// Same untrusted-data treatment as the gradient stops: an imported
+// .sptemplate could carry anything under day_labels. Only the seven real day
+// keys survive, values are coerced to a trimmed string and length-capped so a
+// pathological label can't be used to blow up the canvas text layout.
+const MAX_DAY_LABEL_LENGTH = 12;
+function sanitizeDayLabels(raw) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out = {};
+  for (const day of DAY_NAMES) {
+    const value = raw[day];
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim().slice(0, MAX_DAY_LABEL_LENGTH);
+    if (trimmed) out[day] = trimmed;
+  }
+  return out;
+}
+
 function sanitizeGradientStops(raw) {
   if (!Array.isArray(raw)) return null;
   const stops = raw
@@ -240,5 +281,8 @@ export function styleFromDict(data) {
     backgroundGradientAngle: clampFraction(data.background_gradient_angle, 0, 360, 180),
     backgroundTexture: BACKGROUND_TEXTURES.includes(data.background_texture) ? data.background_texture : "none",
     backgroundTextureOpacity: clampFraction(data.background_texture_opacity, 0.02, 0.6, 0.15),
+    dayLabelLanguage: DAY_LABEL_LANGUAGES.includes(data.day_label_language) ? data.day_label_language : "auto",
+    dayLabels: sanitizeDayLabels(data.day_labels),
+    timeFormat: TIME_FORMATS.includes(data.time_format) ? data.time_format : "24h",
   });
 }
