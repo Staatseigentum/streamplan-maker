@@ -760,6 +760,15 @@ body[data-app-minimized="1"] .theme-swatch.is-animated {
   justify-content: space-between;
   margin-bottom: 4px;
 }
+#settingsModal .settings-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+#settingsModal .settings-brand img {
+  display: block;
+  border-radius: 8px;
+}
 #settingsModal .settings-title {
   font-size: 17px;
   font-weight: 700;

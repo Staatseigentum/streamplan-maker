@@ -1,33 +1,53 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Streamplan Maker calendar and play symbol">
   <defs>
-    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#171029"/>
-      <stop offset="100%" stop-color="#0c0a12"/>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#24183e"/>
+      <stop offset="0.55" stop-color="#120e25"/>
+      <stop offset="1" stop-color="#090d1d"/>
     </linearGradient>
-    <linearGradient id="bars" x1="0%" y1="100%" x2="0%" y2="0%">
-      <stop offset="0%" stop-color="#5f47b8"/>
-      <stop offset="100%" stop-color="#9c7ff0"/>
+    <linearGradient id="calendar" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#372452"/>
+      <stop offset="1" stop-color="#191a36"/>
     </linearGradient>
-    <radialGradient id="dot" cx="35%" cy="30%" r="75%">
-      <stop offset="0%" stop-color="#d9c6ff"/>
-      <stop offset="100%" stop-color="#b98bff"/>
-    </radialGradient>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#9d5cf0"/>
+      <stop offset="1" stop-color="#6467e9"/>
+    </linearGradient>
+    <linearGradient id="play" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#e1a8ff"/>
+      <stop offset="0.48" stop-color="#ad78f2"/>
+      <stop offset="1" stop-color="#795cf2"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="160%">
+      <feGaussianBlur stdDeviation="25"/>
+    </filter>
+    <clipPath id="calendarClip"><rect x="183" y="226" width="658" height="619" rx="100"/></clipPath>
   </defs>
 
-  <rect x="0" y="0" width="1024" height="1024" rx="220" fill="url(#bg)"/>
-  <rect x="24" y="24" width="976" height="976" rx="198" fill="none" stroke="#3a2f5c" stroke-width="6" opacity="0.6"/>
+  <rect width="1024" height="1024" rx="222" fill="url(#tile)"/>
+  <circle cx="786" cy="214" r="272" fill="#8157d7" opacity=".12" filter="url(#shadow)"/>
+  <circle cx="277" cy="845" r="294" fill="#344fae" opacity=".13" filter="url(#shadow)"/>
+  <rect x="27" y="27" width="970" height="970" rx="197" fill="none" stroke="#9180d7" stroke-opacity=".29" stroke-width="7"/>
 
-  <!-- 7 weekday bars, center one is the accent "live" day -->
-  <g>
-    <rect x="228" y="560" width="70" height="220" rx="35" fill="url(#bars)"/>
-    <rect x="326" y="480" width="70" height="300" rx="35" fill="url(#bars)"/>
-    <rect x="424" y="410" width="70" height="370" rx="35" fill="url(#bars)"/>
-    <rect x="522" y="330" width="70" height="450" rx="35" fill="#b98bff"/>
-    <rect x="620" y="410" width="70" height="370" rx="35" fill="url(#bars)"/>
-    <rect x="718" y="480" width="70" height="300" rx="35" fill="url(#bars)"/>
-    <rect x="816" y="560" width="70" height="220" rx="35" fill="url(#bars)"/>
+  <rect x="183" y="246" width="658" height="619" rx="100" fill="#040712" opacity=".52" filter="url(#shadow)"/>
+  <rect x="183" y="226" width="658" height="619" rx="100" fill="url(#calendar)" stroke="#9d86db" stroke-opacity=".82" stroke-width="15"/>
+  <g clip-path="url(#calendarClip)">
+    <rect x="183" y="226" width="658" height="181" fill="url(#header)"/>
+    <path d="M183 407H841" stroke="#d7c1ff" stroke-opacity=".73" stroke-width="12"/>
   </g>
 
-  <!-- live dot above the accent day -->
-  <circle cx="557" cy="270" r="46" fill="url(#dot)"/>
+  <rect x="316" y="159" width="67" height="147" rx="33.5" fill="#d6bdff"/>
+  <rect x="641" y="159" width="67" height="147" rx="33.5" fill="#d6bdff"/>
+  <rect x="326" y="166" width="47" height="118" rx="23.5" fill="#f3eaff" opacity=".56"/>
+  <rect x="651" y="166" width="47" height="118" rx="23.5" fill="#f3eaff" opacity=".56"/>
+
+  <rect x="266" y="467" width="95" height="95" rx="26" fill="#7761b0" opacity=".6"/>
+  <rect x="663" y="467" width="95" height="95" rx="26" fill="#7761b0" opacity=".6"/>
+  <rect x="266" y="656" width="95" height="95" rx="26" fill="#7761b0" opacity=".6"/>
+  <rect x="663" y="656" width="95" height="95" rx="26" fill="#7761b0" opacity=".6"/>
+
+  <circle cx="512" cy="609" r="166" fill="#100d29" opacity=".8"/>
+  <circle cx="512" cy="594" r="153" fill="url(#play)" stroke="#f0d9ff" stroke-width="13"/>
+  <path d="M472 501C472 489 485 482 495 488L624 579C635 587 635 601 624 609L495 700C485 707 472 699 472 687Z" fill="#ffffff"/>
+  <circle cx="758" cy="728" r="38" fill="#ff638d" stroke="#ffd0df" stroke-width="10"/>
 </svg>

@@ -84,6 +84,13 @@ export class SoftwareSettings {
 
     const header = document.createElement("div");
     header.className = "settings-header";
+    const brand = document.createElement("div");
+    brand.className = "settings-brand";
+    const icon = document.createElement("img");
+    icon.src = "assets/icon.png";
+    icon.alt = "";
+    icon.width = 32;
+    icon.height = 32;
     const title = document.createElement("div");
     title.className = "settings-title";
     title.textContent = t("settings.title");
@@ -91,7 +98,8 @@ export class SoftwareSettings {
     closeBtn.className = "settings-close";
     closeBtn.textContent = "✕";
     closeBtn.addEventListener("click", () => this.close());
-    header.append(title, closeBtn);
+    brand.append(icon, title);
+    header.append(brand, closeBtn);
     modal.appendChild(header);
 
     const tabs = document.createElement("div");

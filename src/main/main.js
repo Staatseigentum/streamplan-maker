@@ -6,7 +6,7 @@ const { applyDisplayMode } = require("./displayMode");
 const { initAutoUpdater } = require("./updater");
 
 const APP_NAME = "Streamplan Maker";
-const APP_ICON_PATH = path.join(__dirname, "..", "..", "build", "icon.ico");
+const APP_ICON_PATH = path.join(__dirname, "..", "renderer", "assets", "icon.ico");
 const PROTOCOL_SCHEME = "streamplan-maker";
 
 let mainWindow = null;

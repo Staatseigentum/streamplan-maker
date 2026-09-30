@@ -1,5 +1,7 @@
 # Streamplan Maker
 
+![Streamplan Maker cover](src/renderer/assets/cover.png)
+
 **Streamplan Maker** is a Windows desktop app for designing and exporting polished weekly stream-schedule graphics — the kind of "what's on this week" image streamers post to Twitter/X, Discord, or their channel banner. Everything is edited live: change a day, a color, or a font and the preview updates instantly, with no round-trip to an external design tool.
 
 ## Overview

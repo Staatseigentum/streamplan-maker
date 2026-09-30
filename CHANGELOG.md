@@ -2,6 +2,12 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.21] - 2026-09-30
+
+### Changed
+- Redesigned the app artwork with a calendar and play symbol. The cover now appears in the project README, and the matching icon appears in the editor header, Settings, browser tab, app window, executable, installer, and Windows shortcuts.
+- Optimized the 16, 24, and 32 pixel icon variants for clearer display in the taskbar and other small spaces.
+
 ## [1.0.20] - 2026-08-03
 
 ### Added
