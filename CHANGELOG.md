@@ -2,6 +2,11 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.22] - 2026-09-30
+
+### Fixed
+- Reworked the app icon for its actual taskbar and shortcut sizes. The calendar and play symbol now fill the icon without the dark outer tile or tiny decorative details, making the mark readable from 16 to 256 pixels.
+
 ## [1.0.21] - 2026-09-30
 
 ### Changed
