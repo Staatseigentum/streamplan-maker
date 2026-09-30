@@ -6,7 +6,7 @@ const SIZES = [16, 24, 32, 48, 64, 128, 256];
 const OUT_DIR = path.join(__dirname, "..", "build");
 const RENDERER_ASSETS_DIR = path.join(__dirname, "..", "src", "renderer", "assets");
 const SVG_PATH = path.join(__dirname, "icon-source.svg");
-const APP_ICON_SVG_PATH = path.join(__dirname, "icon-small.svg");
+const TINY_SVG_PATH = path.join(__dirname, "icon-tiny.svg");
 
 function buildBmpIconImage(image, size) {
   const pixels = image.toBitmap();
@@ -62,8 +62,7 @@ function buildIco(iconBuffers) {
 async function main() {
   await app.whenReady();
 
-  const coverMarkSvg = fs.readFileSync(SVG_PATH, "utf-8");
-  const iconSvg = fs.readFileSync(APP_ICON_SVG_PATH, "utf-8");
+  const iconSvg = fs.readFileSync(SVG_PATH, "utf-8");
   const html = `<!doctype html><html><head><meta charset="utf-8"><style>
     html,body{margin:0;padding:0;background:transparent;}
     #wrap{width:1024px;height:1024px;}
@@ -83,6 +82,10 @@ async function main() {
   await new Promise((r) => setTimeout(r, 150));
 
   const iconImage = await win.webContents.capturePage();
+  const tinySvg = fs.readFileSync(TINY_SVG_PATH, "utf-8");
+  await win.loadURL("data:text/html;charset=utf-8," + encodeURIComponent(html.replace(iconSvg, tinySvg)));
+  await new Promise((r) => setTimeout(r, 150));
+  const tinyImage = await win.webContents.capturePage();
 
   if (!fs.existsSync(OUT_DIR)) fs.mkdirSync(OUT_DIR, { recursive: true });
   if (!fs.existsSync(RENDERER_ASSETS_DIR)) fs.mkdirSync(RENDERER_ASSETS_DIR, { recursive: true });
@@ -90,7 +93,8 @@ async function main() {
   const pngBuffers = [];
   const iconBuffers = [];
   for (const size of SIZES) {
-    const resized = iconImage.resize({ width: size, height: size, quality: "best" });
+    const source = size === 16 ? tinyImage : iconImage;
+    const resized = source.resize({ width: size, height: size, quality: "best" });
     const buf = resized.toPNG();
     pngBuffers.push(buf);
     iconBuffers.push(size === 256 ? buf : buildBmpIconImage(resized, size));
@@ -129,7 +133,7 @@ async function main() {
     .mark svg{display:block;width:100%;height:100%}
   </style></head><body>
     <div class="grid"></div><div class="schedule"><div class="row"></div><div class="row"></div><div class="row"></div><div class="row"></div><div class="row"></div><div class="row"></div></div>
-    <div class="mark">${coverMarkSvg}</div><div class="accent"></div>
+    <div class="mark">${iconSvg}</div><div class="accent"></div>
     <div class="eyebrow">STREAM SCHEDULE STUDIO</div>
     <div class="title"><span>STREAMPLAN</span><span>MAKER</span></div>
     <div class="subtitle">CRAFT YOUR STREAM SCHEDULE</div>

@@ -2,6 +2,11 @@
 
 All notable changes to Streamplan Maker are documented here. Each entry becomes the GitHub release notes for that version, and is also shown in the in-app "update ready" popup.
 
+## [1.0.23] - 2026-09-30
+
+### Fixed
+- Replaced the calendar/play app icon, which was hard to recognize in the Windows taskbar, with a bright weekly-bar mark and live dot. The same mark now appears in the cover, editor, executable, and installer. The 16-pixel icon has a dedicated three-bar drawing so it stays distinct at its actual display size.
+
 ## [1.0.22] - 2026-09-30
 
 ### Fixed
